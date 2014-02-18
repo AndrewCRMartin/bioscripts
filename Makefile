@@ -1,7 +1,7 @@
 # This is where you want to install the Perl scripts
-dest=/tmp/test/bioscripts
+dest=$(HOME)/scripts/bioscripts
 # And this is where the executables live
-bin=/tmp/test/bin
+bin=$(HOME)/bin
 
 # Current directory
 src=$(shell pwd)
