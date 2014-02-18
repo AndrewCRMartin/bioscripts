@@ -30,7 +30,7 @@ pfiles   := $(addsuffix .src, $(pbases))
 
 all :
 	@echo "Nothing to do."
-	@echo "Use 'make install' to install the files'
+	@echo "Use 'make install' to install the files"
 
 
 install : $(pbases)
