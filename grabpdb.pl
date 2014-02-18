@@ -51,7 +51,6 @@
 #
 #*************************************************************************
 use LWP::UserAgent;
-use IPC::Open2;
 use strict;
 
 #*************************************************************************
@@ -160,40 +159,6 @@ sub CreateURL
     my $url = sprintf($::URLtemplate, $pdb);
     return($url);
 }
-
-
-#*************************************************************************
-# Uncompresses a compressed datafile using the command specified in the
-# global $::zcat variable. Input is the compressed data and output is the
-# uncompressed data.
-#
-# 28.02.13 Original   By: ACRM
-sub UncompressPipe
-{
-    my($inData) = @_;
-    my($childIn, $childOut);
-
-    print STDERR "Starting decompression\n" if(defined($::d));
-
-    my $pid = open2($childOut, $childIn, $::zcat);
-    print STDERR "Decompression process ID: $pid\n" if(defined($::d));
-
-    print $childIn $inData;
-    close $childIn;
-    my @outData = <$childOut>;
-    close $childOut;
-
-    print STDERR "Waiting for decompression process to complete\n" if(defined($::d));
-    waitpid( $pid, 0 );
-
-    my $child_exit_status = $? >> 8;
-    print STDERR "Decompression status: $child_exit_status\n" if(defined($::d));
-    printf STDERR "Decompressed data contains %d lines\n", scalar(@outData) if(defined($::d));
-
-    my $mergedData = join('', @outData);
-    return($mergedData);
-}
-
 
 #*************************************************************************
 # Uncompresses a compressed datafile using the command specified in the
