@@ -28,11 +28,18 @@ pstems   := $(notdir $(psources))       # Strip the path
 pbases   := $(basename $(pstems))       # Strip the extension
 pfiles   := $(addsuffix .src, $(pbases))
 
-all : $(pbases)
+all :
+	@echo "Nothing to do."
+	@echo "Use 'make install' to install the files'
+
+
+install : $(pbases)
 
 %.src : %.pl
+	mkdir -p $(dest)
 	(cd $(dest); cp $(src)/$< $@)
 
 % : %.src
+	mkdir -p $(bin)
 	(cd $(bin); ln -sf $(dest)/$< $@)
 
