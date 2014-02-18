@@ -1,4 +1,4 @@
-#!/acrm/usr/local/bin/perl -s
+#!/usr/bin/perl -s
 #*************************************************************************
 #
 #   Program:    fastamotifsearch
