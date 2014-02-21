@@ -19,11 +19,8 @@ PREREQUISITES
 
 You need to install the following Perl modules:
    LWP::UserAgent
-
-
-If you are using Yum, you should be able to do this with something like:
-   yum -y install Perl-LWP-UserAgent
-Otherwise do:
+Fedora/RedHat/CentOS installs this automatically. Otherwise (as root)
+do: 
    perl -MCPAN -e shell
    install LWP::UserAgent
 
