@@ -1,0 +1,2 @@
+ftp://ftp.wwpdb.org/pub/pdb/data/structures/all/pdb/ /tmp/pdb/pdb/ decompress wget retry=2
+

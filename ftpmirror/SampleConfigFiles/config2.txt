@@ -1,0 +1,2 @@
+ftp://ftp.ebi.ac.uk/pub/databases/rcsb/pdb/data/structures/all/pdb/ /tmp/pdb/ decompress recurse wget retry=2
+

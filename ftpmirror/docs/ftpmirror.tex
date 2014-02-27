@@ -1,0 +1,194 @@
+\documentclass{article}
+\usepackage{a4}
+\usepackage{tabularx}
+\title{FTPMirror}
+\author{Dr.\ Andrew C.R.\ Martin}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+FTPMirror is a simple program to mirror one or more FTP sites and to
+handle compression or decompression of the files. The Sunsite Mirror
+script (and indeed the Perl LWP package) seems to fail on very large
+remote directories (e.g.\ the PDB which has $>67700$ files). This script
+will handle such large directories.
+
+FTPMirror uses a single configuration file for all the sites to be
+mirrored. It can mirror single files or directories and can handle
+directory trees if required.
+
+\section{Installation}
+Note that you must have the following software installed to use
+FTPMirror:
+
+\begin{center}
+\begin{tabularx}{\linewidth}{lX}\hline
+Perl & the Perl interpreter \\
+Perl LWP &  the LWP package for Perl (plus any pre-requisites
+that it may need) \\
+wget &  The wget program for downloading files by FTP or
+HTTP. Only required if you are mirroring very large directories
+using wget mode.\\\hline
+\end{tabularx}
+\end{center}
+
+Once you have downloaded the FTPMirror Perl script, simply place it
+somewhere in your path and ensure it is executable:
+\begin{verbatim}
+chmod +x ftpmirror.pl
+\end{verbatim}
+
+\section{Running FTPMirror}
+FTPMirror is run simply by typing the command:
+\begin{verbatim}
+ftpmirror.pl configfile
+\end{verbatim}
+where configfile is a configuration file as described below.
+\vspace{2em}
+
+You can run the program with a \verb|-h| flag to obtain help:
+\begin{verbatim}
+ftpmirror.pl -h
+\end{verbatim}
+and with debugging options:
+\begin{verbatim}
+ftpmirror.pl -debug=n configfile
+\end{verbatim}
+The \verb|-debug| flag may be set to values 1, 2, or 3 with the
+following effects:
+\begin{enumerate}
+\item Prints results of parsing the configuration file, wget reports
+  progress 
+\item Mirroring exits after 10 files
+\item When cleaning local files, the first 10 files from the remote
+  file and directory lists are printed
+\end{enumerate}
+\vspace{2em}
+
+You can also run the program with a \verb|-quiet| flag to suppress all
+output about progress of what files are being downloaded or removed.
+
+\section{The configuration file}
+The configuration file consists of lines with two compulsory fields
+(the source and destination) and optional fields containing flags as
+described below. {\bfseries All fields must appear on a single line.}
+
+The configuration file may contain blank lines and comments introduced
+with a hash character(\#).
+\vspace{2em}
+
+The first field is the source URL in the form:
+\begin{verbatim}
+ftp://server/directory/
+\end{verbatim}
+For example:
+\begin{verbatim}
+ftp://ftp.wwpdb.org/pub/pdb/data/structures/all/pdb/
+\end{verbatim}
+
+The second field contains the full path to the destination directory
+in which the mirror will be stored:
+\begin{verbatim}
+/path/to/mirror/
+\end{verbatim}
+For example:
+\begin{verbatim}
+/data/pdb/
+\end{verbatim}
+This may also be a filename (rather than a directory name) if the
+source URL is a file rather than a directory and the `file' flag is
+used (see below).
+
+Remaining fields are flags:
+\begin{description}
+\item[recurse]    recurse into lower directories. By default only the
+  current directory specified by the URL will be mirrored. Use this
+  option to mirror sub-directories as well.
+\item[decompress] decompress remote compressed files. Currently this
+  only works with gzipped remote files.
+\item[compress]   compress remote uncompressed files. Currently this
+  only uses gzip to compress the local files.
+\item[file]       this specifies that the remote URL refers to a
+  single file rather than a directory
+\item[wget]       use wget rather than LWP to obtain the remote
+  directory listing. This is used for big directories where LWP seems
+  to fail.
+\item[retry=n]    this is only valid when `wget' is used and specifies
+                  the number of wget retries (Default is 1).
+                  A value of 0 will keep trying indefinitely.
+\item[noclean]    do not clean up local files that have gone away on the
+                  remote machine
+\item[fast] just checks if files have appeared/disappeared rather than
+                  checking the date-stamps on the files. This means
+                  that if the content of a file has changed, that will
+                  not be reflected in the mirror. The default is to
+                  check the files more carefully by comparing date
+                  stamps.
+\item[regex=r]    only downloads files if the filename (excluding
+                  the path) matches the specified Perl regular
+                  expression. This is a full Perl regular expression,
+                  so may contain alternatives, anchors, etc.
+\item[excl=r]     skip files if the full URL filename path matches the
+                  specified Perl regular expression. This is a full
+                  Perl regular expression, so may contain
+                  alternatives, anchors, etc. This overrides matching
+                  with regex= thus allowing you to retrieve all files
+                  matching a certain pattern unless they are in 
+                  directories which match another pattern
+                  
+\end{description}
+
+\section{Examples}
+The following examples all represent individual lines in the
+ configuration file. {\bfseries Each should be entered on a single
+ line in the config file, even if broken across multiple lines here.}
+\vspace{1em}
+
+\noindent Mirror the PDB:
+{\footnotesize
+\begin{verbatim}
+ftp://ftp.wwpdb.org/pub/pdb/data/structures/all/pdb/ /acrm/data/pdb/ wget
+\end{verbatim}
+}
+This would be slow since it is comparing the date stamps on each
+file.
+\vspace{1em}
+
+\noindent Mirror the PDB, but don't check the date stamps to speed things up:
+{\footnotesize
+\begin{verbatim}
+ftp://ftp.wwpdb.org/pub/pdb/data/structures/all/pdb/ /acrm/data/pdb/ wget fast
+\end{verbatim}
+}
+\vspace{1em}
+
+\noindent Mirror the PDB, decompressing each local file:
+{\footnotesize
+\begin{verbatim}
+ftp://ftp.wwpdb.org/pub/pdb/data/structures/all/pdb/ /acrm/data/pdb/ wget fast 
+      decompress
+\end{verbatim}
+}
+\vspace{1em}
+
+\noindent Mirror the Human SubXXXX.bcp.gz files from dbSNP
+{\footnotesize
+\begin{verbatim}
+ftp://ftp.ncbi.nlm.nih.gov/snp/organisms/human_9606/database/organism_data/ 
+      /tmp/mirror/ regex=^Sub.*\.bcp\.gz
+\end{verbatim}
+}
+\vspace{1em}
+
+\noindent Mirror the Human SubXXXX.bcp.gz files from dbSNP but exclude
+those that are in archive directories
+{\footnotesize
+\begin{verbatim}
+ftp://ftp.ncbi.nlm.nih.gov/snp/organisms/human_9606/ /tmp/mirror/ 
+      regex=^Sub.*\.bcp\.gz excl=archive recurse
+\end{verbatim}
+}
+\end{document}
+
+

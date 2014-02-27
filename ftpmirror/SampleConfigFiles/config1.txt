@@ -1,0 +1,1 @@
+ftp://ftp.ebi.ac.uk/pub/databases/rcsb/pdb/data/structures/all/pdb/pdb1yqv.ent.gz /tmp/pdb/ decompress file

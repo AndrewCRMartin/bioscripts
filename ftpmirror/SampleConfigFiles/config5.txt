@@ -1,0 +1,1 @@
+ftp://ftp.ncbi.nlm.nih.gov/snp/organisms/human_9606/database/organism_data/ /tmp/mirror/ regex=^dn_.*\.bcp\.gz

@@ -1,0 +1,2 @@
+ftp://ftp.wwpdb.org/pub/pdb/data/structures/all/ /tmp/pdb/ decompress recurse wget retry=4
+
