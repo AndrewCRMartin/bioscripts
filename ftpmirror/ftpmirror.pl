@@ -4,8 +4,8 @@
 #   Program:    ftpmirror
 #   File:       ftpmirror.pl
 #   
-#   Version:    V1.0
-#   Date:       24.08.10
+#   Version:    V1.1
+#   Date:       09.09.10
 #   Function:   Mirror an FTP site dealing with compressing and 
 #               uncompressing if needed
 #   
@@ -62,6 +62,7 @@
 #   =================
 #
 #   V1.0   24.08.10   Original   By: ACRM
+#   V1.1   09.09.10   Fixed a bug in cleanup when fast mode is used
 #
 #*************************************************************************
 use LWP::Simple;
@@ -107,8 +108,8 @@ while(<>)
 
         if(!$::quiet)
         {
-            print "Warning: Using fast mode. Modified files will not \
-be detected!\n";
+            print "Warning: Using fast mode. Modified files will not ";
+            print "be detected!\n";
         }
 
         # Now actually process the line
@@ -122,6 +123,8 @@ be detected!\n";
 #
 # 19.08.10  Original   By: ACRM
 # 24.08.10  Added $fast
+# 09.09.10  Added @fullfilelist as it was trying to delete all non-new
+#           files in fast mode
 sub HandleRequest
 {
     my($url, $destination, $recurse, $compress, $fileonly, $wget, 
@@ -148,7 +151,7 @@ are directories";
     else                        # It's a directory
     {
         my $remotedir;
-        my (@files, @dirs);
+        my (@files, @dirs, @fullfilelist);
 
         CreateDirIfNeeded($destination);
 
@@ -163,8 +166,13 @@ are directories";
             ParseWgetFile($tfile, \@files, \@dirs);
             unlink $tfile;
 
-            # If $fast is set, then trim the filelist down to just those that
-            # aren't there already
+            # Make a copy of the full file list so that we know what 
+            # files should be in the directory if we are using fast mode 
+            # and trimming the list of files to be copied
+            @fullfilelist = @files;
+
+            # If $fast is set, then trim the filelist down to just those 
+            # that aren't there already
             if($fast)
             {
                 @files = TrimFileList($destination, $compress, @files);
@@ -176,6 +184,11 @@ are directories";
             $remotedir = get $url;
             # ...and extract list of files and directories it contains
             ParseRemoteDir($remotedir, \@files, \@dirs);
+
+            # Make a copy of the full file list so that we know what 
+            # files should be in the directory if we are using fast mode 
+            # and trimming the list of files to be copied
+            @fullfilelist = @files;
         }
                 
         # Run through the files listed in the remote directory, 
@@ -195,7 +208,8 @@ are directories";
 
         # Clean up any local files that have gone away on the remote 
         # machine
-        CleanDirectory($destination, \@files, \@dirs, $compress, $noclean);
+        CleanDirectory($destination, \@fullfilelist, \@dirs, $compress, 
+                       $noclean);
 
         # If recursion is switched on then recursively handle each of 
         # sub-directories contained in this directory
@@ -661,11 +675,12 @@ sub TrimFileList
 # Prints a usage message
 #
 # 19.08.10  Original   By: ACRM
+# 09.09.10  V1.1
 sub Usage
 {
     print <<__EOF;
 
-ftpmirror V1.0 (c) 2010, Dr. Andrew C.R Martin
+ftpmirror V1.1 (c) 2010, Dr. Andrew C.R Martin
 
 Usage: ftpmirror [-debug[=n]] [-quiet] config_file
        -debug    Turn on debugging information
