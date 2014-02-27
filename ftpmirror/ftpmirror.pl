@@ -397,7 +397,7 @@ sub MirrorCompressFile
         # If remote is more recent, grab it and deal with compression
         if($remotetime > $mtime)
         {
-            print "Getting $url\n" if(!defined($::quiet));
+            print "Updating $url\n" if(!defined($::quiet));
             mirror($url, BuildName($dirname,$filename,0));
             DoCompression($dirname, $filename, $compress);
         }
