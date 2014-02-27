@@ -34,6 +34,7 @@ all :
 
 
 install : $(pbases)
+	(cd ftpmirror; make install)
 
 %.src : %.pl
 	mkdir -p $(dest)
