@@ -5,7 +5,7 @@
 #   File:       ftpmirror.pl
 #   
 #   Version:    V1.0
-#   Date:       19.08.10
+#   Date:       24.08.10
 #   Function:   Mirror an FTP site dealing with compressing and 
 #               uncompressing if needed
 #   
@@ -53,13 +53,15 @@
 #                     will keep trying indefintely)
 #        noclean    - do not clean up files that have gone away on the
 #                     remote machine
+#        fast       - just checks if files have appeared/disappeared
+#                     rather than checking the date-stamps on the files
 #
 #*************************************************************************
 #
 #   Revision History:
 #   =================
 #
-#   V1.0   19.08.10   Original   By: ACRM
+#   V1.0   24.08.10   Original   By: ACRM
 #
 #*************************************************************************
 use LWP::Simple;
@@ -69,6 +71,7 @@ use strict;
 # Main code
 #
 # 19.08.10  Original   By: ACRM
+# 24.08.10  Added $fast
 if(defined($::h))
 {
     Usage();
@@ -86,7 +89,7 @@ while(<>)
     {
         # Parse the line from the config file
         my($url, $destination, $recurse, $compress, $file, $wget, 
-           $retry, $noclean) = ParseConfigLine($_);
+           $retry, $noclean, $fast) = ParseConfigLine($_);
 
         if(defined($::debug))
         {
@@ -99,11 +102,18 @@ while(<>)
             print "USE-WGET:    $wget\n";
             print "NUM-RETRIES: $retry\n";
             print "NOCLEAN:     $noclean\n";
+            print "FAST:        $fast\n";
+        }
+
+        if(!$::quiet)
+        {
+            print "Warning: Using fast mode. Modified files will not \
+be detected!\n";
         }
 
         # Now actually process the line
         HandleRequest($url, $destination, $recurse, $compress, $file, 
-                      $wget, $retry, $noclean);
+                      $wget, $retry, $noclean, $fast);
     }
 }
 
@@ -111,10 +121,11 @@ while(<>)
 # Does the actual work of processing a mirror request
 #
 # 19.08.10  Original   By: ACRM
+# 24.08.10  Added $fast
 sub HandleRequest
 {
     my($url, $destination, $recurse, $compress, $fileonly, $wget, 
-       $retry, $noclean) = @_;
+       $retry, $noclean, $fast) = @_;
 
     print "Handling $url\n" if(!defined($::quiet));
 
@@ -139,6 +150,8 @@ are directories";
         my $remotedir;
         my (@files, @dirs);
 
+        CreateDirIfNeeded($destination);
+
         if($wget)
         {
             # Using wget, we grab the directory to a temporary file...
@@ -149,6 +162,13 @@ are directories";
             # ...and extract list of files and directories it contains
             ParseWgetFile($tfile, \@files, \@dirs);
             unlink $tfile;
+
+            # If $fast is set, then trim the filelist down to just those that
+            # aren't there already
+            if($fast)
+            {
+                @files = TrimFileList($destination, $compress, @files);
+            }
         }
         else
         {
@@ -158,8 +178,6 @@ are directories";
             ParseRemoteDir($remotedir, \@files, \@dirs);
         }
                 
-        CreateDirIfNeeded($destination);
-
         # Run through the files listed in the remote directory, 
         # grabbing them
         my $count = 0;
@@ -177,10 +195,7 @@ are directories";
 
         # Clean up any local files that have gone away on the remote 
         # machine
-        if(!$noclean)
-        {
-            CleanDirectory($destination, \@files, \@dirs, $compress);
-        }
+        CleanDirectory($destination, \@files, \@dirs, $compress, $noclean);
 
         # If recursion is switched on then recursively handle each of 
         # sub-directories contained in this directory
@@ -206,9 +221,11 @@ are directories";
 # network failure.
 #
 # 19.08.10  Original   By: ACRM
+# 24.08.10  $noclean passed in here so it can report files that should
+#           have been removed
 sub CleanDirectory
 {
-    my($destination, $pFiles, $pDirs, $compress) = @_;
+    my($destination, $pFiles, $pDirs, $compress, $noclean) = @_;
     my(%fileHash, %dirHash);
 
     # For debugging print the 1st 10 entries from the lists of remote 
@@ -250,11 +267,22 @@ sub CleanDirectory
             {
                 if(!defined($dirHash{$file}))
                 {
-                    if(!defined($::quiet))
+                    if($noclean)
                     {
-                        print "Removing directory: $filename\n";
+                        if(!defined($::quiet))
+                        {
+                            print "Directory should be removed: \
+$filename\n";
+                        }
                     }
-                    `\rm -rf $filename`;
+                    else
+                    {
+                        if(!defined($::quiet))
+                        {
+                            print "Removing directory: $filename\n";
+                        }
+                        `\rm -rf $filename`;
+                    }
                 }
             }
             else                # It's a file so check the file hash
@@ -278,11 +306,21 @@ sub CleanDirectory
 
                 if(!defined($fileHash{$file}))
                 {
-                    if(!defined($::quiet))
+                    if($noclean)
                     {
-                        print "Removing file: $filename\n";
+                        if(!defined($::quiet))
+                        {
+                            print "File should be removed: $filename\n";
+                        }
                     }
-                    unlink $filename;
+                    else
+                    {
+                        if(!defined($::quiet))
+                        {
+                            print "Removing file: $filename\n";
+                        }
+                        unlink $filename;
+                    }
                 }
             }
         }
@@ -453,6 +491,7 @@ sub BuildName
 # Parse a line from the config file
 #
 # 19.08.10  Original   By: ACRM
+# 24.08.10  Added FAST
 sub ParseConfigLine
 {
     my($line)    = @_;
@@ -463,6 +502,7 @@ sub ParseConfigLine
     my $wget     = 0;
     my $retry    = 1;
     my $noclean  = 0;
+    my $fast     = 0;
 
     # Extract fields from configuration line
     my @fields = split(/\s+/, $line);
@@ -518,9 +558,13 @@ sub ParseConfigLine
         {
             $noclean = 1;
         }
+        elsif ($field eq "FAST")
+        {
+            $fast = 1;
+        }
     }
     return($url, $destination, $recurse, $compress, $file, $wget, 
-           $retry, $noclean);
+           $retry, $noclean, $fast);
 }
     
 #*************************************************************************
@@ -553,6 +597,67 @@ sub ParseWgetFile
 }
 
 #*************************************************************************
+sub TrimFileList
+{
+    my($destination, $compress, @infiles) = @_;
+    my @outfiles = ();
+    my @localfiles = ();
+    my %localfilelist;
+
+    # Get the list of files present in the destination directory
+    opendir(DIR, $destination) || 
+        die "Can't read directory: $destination";
+    @localfiles = grep !/^\./, readdir(DIR);
+    closedir DIR;
+
+    # Convert the list of local filenames into a hash for faster lookups
+    # At the same time, we add/remove .gz if compressing
+    if($compress == 1)
+    {
+        # We have saved it compressed while original was not 
+        # so we remove the .gz extension from the filename 
+        # we have locally
+        foreach my $file (@localfiles)
+        {
+            $file =~ s/\.gz$//;
+            $localfilelist{$file} = 1;
+        }
+    }
+    elsif($compress == (-1))
+    {
+        # We have saved it uncompressed while original was 
+        # compressed so we add the .gz extension to the 
+        # filename we have locally
+        foreach my $file (@localfiles)
+        {
+            $file .= ".gz";
+            $localfilelist{$file} = 1;
+        }
+    }
+    else
+    {
+        foreach my $file (@localfiles)
+        {
+            $localfilelist{$file} = 1;
+        }
+    }
+
+    # Now run through the list of files we are dealing with and remove
+    # them if they are already in our set of local files
+    foreach my $file (@infiles)
+    {
+        if(!defined($localfilelist{$file}))
+        {
+            push @outfiles, $file;
+        }
+    }
+
+    # Return the list of files that were on the remote server but not
+    # stored locally
+    return(@outfiles);
+}
+
+#*************************************************************************
 # Prints a usage message
 #
 # 19.08.10  Original   By: ACRM
@@ -562,7 +667,7 @@ sub Usage
 
 ftpmirror V1.0 (c) 2010, Dr. Andrew C.R Martin
 
-Usage: ftpmirror [-debug[=2]] [-quiet] config_file
+Usage: ftpmirror [-debug[=n]] [-quiet] config_file
        -debug    Turn on debugging information
                  Setting to -debug=2 restricts downloading a maximum 
                  of 10 files from each directory
@@ -586,10 +691,12 @@ Flags:   recurse    - recurse into lower directories
                       A value of 0 will keep trying indefintely.
          noclean    - do not clean up files that have gone away on the
                       remote machine
+         fast       - just checks if files have appeared/disappeared
+                      rather than checking the date-stamps on the files
 
 ftpmirror is a simple program for mirroring remote FTP sites, but
 which allows remote uncompressed files to be compressed locally and
-vice versa. By default it uses the Perl LWP packages for retrieving
+vice versa. By default it uses the Perl LWP package for retrieving
 file lists etc, but these seem to have problems with very large
 directories. In those cases, giving the 'wget' option will make the
 script use wget to retireve these large directory lists.  The
