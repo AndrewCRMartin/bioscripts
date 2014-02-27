@@ -4,14 +4,14 @@
 #   Program:    ftpmirror
 #   File:       ftpmirror.pl
 #   
-#   Version:    V1.1
-#   Date:       09.09.10
+#   Version:    V1.2
+#   Date:       04.11.10
 #   Function:   Mirror an FTP site dealing with compressing and 
 #               uncompressing if needed
 #   
 #   Copyright:  (c) Dr. Andrew C. R. Martin 2010
 #   Author:     Dr. Andrew C. R. Martin
-#   EMail:      andrew@andrew-martin.org
+#   EMail:      andrew@bioinf.org.uk
 #               
 #*************************************************************************
 #
@@ -63,6 +63,7 @@
 #
 #   V1.0   24.08.10   Original   By: ACRM
 #   V1.1   09.09.10   Fixed a bug in cleanup when fast mode is used
+#   V1.2   04.11.10   Added regex matching
 #
 #*************************************************************************
 use LWP::Simple;
@@ -73,6 +74,7 @@ use strict;
 #
 # 19.08.10  Original   By: ACRM
 # 24.08.10  Added $fast
+# 04.11.10  Added $regex and $exclregex
 if(defined($::h))
 {
     Usage();
@@ -90,7 +92,7 @@ while(<>)
     {
         # Parse the line from the config file
         my($url, $destination, $recurse, $compress, $file, $wget, 
-           $retry, $noclean, $fast) = ParseConfigLine($_);
+           $retry, $noclean, $fast, $regex, $exclregex) = ParseConfigLine($_);
 
         if(defined($::debug))
         {
@@ -104,9 +106,11 @@ while(<>)
             print "NUM-RETRIES: $retry\n";
             print "NOCLEAN:     $noclean\n";
             print "FAST:        $fast\n";
+            print "REGEX:       $regex\n";
+            print "EXCL:        $exclregex\n";
         }
 
-        if(!$::quiet)
+        if(!$::quiet && $fast)
         {
             print "Warning: Using fast mode. Modified files will not ";
             print "be detected!\n";
@@ -114,7 +118,7 @@ while(<>)
 
         # Now actually process the line
         HandleRequest($url, $destination, $recurse, $compress, $file, 
-                      $wget, $retry, $noclean, $fast);
+                      $wget, $retry, $noclean, $fast, $regex, $exclregex);
     }
 }
 
@@ -125,10 +129,11 @@ while(<>)
 # 24.08.10  Added $fast
 # 09.09.10  Added @fullfilelist as it was trying to delete all non-new
 #           files in fast mode
+# 04.11.10  Added $regex and $exclregex
 sub HandleRequest
 {
     my($url, $destination, $recurse, $compress, $fileonly, $wget, 
-       $retry, $noclean, $fast) = @_;
+       $retry, $noclean, $fast, $regex, $exclregex) = @_;
 
     print "Handling $url\n" if(!defined($::quiet));
 
@@ -196,13 +201,35 @@ are directories";
         my $count = 0;
         foreach my $filename (@files)
         {
-            # Grabs a file and handles compression as required
-            MirrorCompressFile(BuildName($url,$filename,0), $destination, 
-                               $filename, $compress);
-            if(($::debug > 1) && ($count++ > 10))
+            my $fullurl = BuildName($url,$filename,0);
+
+            if(($regex eq "") || ($filename =~ /$regex/)) # 04.11.10
             {
-                print "exited after 10 files\n";
-                last;
+                if(($exclregex eq "") || (!($fullurl =~ /$exclregex/))) # 04.11.10
+                {
+                    # Grabs a file and handles compression as required
+                    MirrorCompressFile($fullurl, $destination, 
+                                       $filename, $compress);
+                    if(($::debug > 1) && ($count++ > 10))
+                    {
+                        print "exited after 10 files\n";
+                        last;
+                    }
+                }
+                else
+                {
+                    if($::verbose)
+                    {
+                        print "Skipped file which matches EXCL regex: $fullurl\n";
+                    }
+                }
+            }
+            else
+            {
+                if($::verbose)
+                {
+                    print "Skipped file which does not match REGEX: $fullurl\n";
+                }
             }
         }
 
@@ -222,7 +249,8 @@ are directories";
                               1, # Recurse
                               $compress, 
                               0, # Fileonly
-                              $wget, $retry, $noclean);
+                              $wget, $retry, $noclean, $fast, 
+                              $regex, $exclregex);
             }
         }
     }
@@ -506,17 +534,20 @@ sub BuildName
 #
 # 19.08.10  Original   By: ACRM
 # 24.08.10  Added FAST
+# 04.11.10  Added REGEX and EXCL
 sub ParseConfigLine
 {
-    my($line)    = @_;
+    my($line)     = @_;
 
-    my $recurse  = 0;
-    my $compress = 0;
-    my $file     = 0;
-    my $wget     = 0;
-    my $retry    = 1;
-    my $noclean  = 0;
-    my $fast     = 0;
+    my $recurse   = 0;
+    my $compress  = 0;
+    my $file      = 0;
+    my $wget      = 0;
+    my $retry     = 1;
+    my $noclean   = 0;
+    my $fast      = 0;
+    my $regex     = "";
+    my $exclregex = "";
 
     # Extract fields from configuration line
     my @fields = split(/\s+/, $line);
@@ -527,8 +558,7 @@ sub ParseConfigLine
     # Check flags set in remaining fields
     foreach my $field (@fields)
     {
-        $field = "\U$field";
-        if($field eq "RECURSE")
+        if($field =~ /^RECURSE$/i)
         {
             if($file)
             {
@@ -536,7 +566,7 @@ sub ParseConfigLine
             }
             $recurse = 1;
         }
-        elsif ($field eq "DECOMPRESS")
+        elsif ($field =~ /^DECOMPRESS$/i)
         {
             if($compress != 0)
             {
@@ -544,7 +574,7 @@ sub ParseConfigLine
             }
             $compress = -1;
         }
-        elsif ($field eq "COMPRESS")
+        elsif ($field =~ /^COMPRESS$/i)
         {
             if($compress != 0)
             {
@@ -552,7 +582,7 @@ sub ParseConfigLine
             }
             $compress = 1;
         }
-        elsif ($field eq "FILE")
+        elsif ($field =~ /^FILE$/i)
         {
             if($recurse)
             {
@@ -560,25 +590,33 @@ sub ParseConfigLine
             }
             $file = 1;
         }
-        elsif ($field eq "WGET")
+        elsif ($field =~ /^WGET$/i)
         {
             $wget = 1;
         }
-        elsif ($field =~ /RETRY=(.*)/)
+        elsif ($field =~ /RETRY=(.*)/i)
         {
             $retry = $1;
         }
-        elsif ($field eq "NOCLEAN")
+        elsif ($field =~ /REGEX=(.*)/i)
+        {
+            $regex = $1;
+        }
+        elsif ($field =~ /EXCL=(.*)/i)
+        {
+            $exclregex = $1;
+        }
+        elsif ($field =~ /^NOCLEAN$/i)
         {
             $noclean = 1;
         }
-        elsif ($field eq "FAST")
+        elsif ($field =~ /^FAST$/i)
         {
             $fast = 1;
         }
     }
     return($url, $destination, $recurse, $compress, $file, $wget, 
-           $retry, $noclean, $fast);
+           $retry, $noclean, $fast, $regex, $exclregex);
 }
     
 #*************************************************************************
@@ -676,11 +714,12 @@ sub TrimFileList
 #
 # 19.08.10  Original   By: ACRM
 # 09.09.10  V1.1
+# 04.11.10  V1.2
 sub Usage
 {
     print <<__EOF;
 
-ftpmirror V1.1 (c) 2010, Dr. Andrew C.R Martin
+ftpmirror V1.2 (c) 2010, Dr. Andrew C.R Martin
 
 Usage: ftpmirror [-debug[=n]] [-quiet] config_file
        -debug    Turn on debugging information
@@ -691,6 +730,8 @@ Usage: ftpmirror [-debug[=n]] [-quiet] config_file
                  that have gone away
        -quiet    Prints no information about files being downloaded
                  or removed
+       -verbose  Print the names of files skipped through not matching
+                 REGEX or from matching EXCL
 
 The configuration file consists of two required fields followed by
 optional flags which may be specified in any order:
@@ -708,6 +749,12 @@ Flags:   recurse    - recurse into lower directories
                       remote machine
          fast       - just checks if files have appeared/disappeared
                       rather than checking the date-stamps on the files
+         regex=r    - only downloads files if the filename (excluding 
+                      the path) matches the specified Perl regular 
+                      expression
+         excl=r     - skip files if the full URL filename path matches
+                      the specified Perl regular expression. This
+                      overrides matching with regex=
 
 ftpmirror is a simple program for mirroring remote FTP sites, but
 which allows remote uncompressed files to be compressed locally and
