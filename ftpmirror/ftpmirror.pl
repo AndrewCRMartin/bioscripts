@@ -4,12 +4,12 @@
 #   Program:    ftpmirror
 #   File:       ftpmirror.pl
 #   
-#   Version:    V1.2
-#   Date:       04.11.10
+#   Version:    V1.3
+#   Date:       28.03.14
 #   Function:   Mirror an FTP site dealing with compressing and 
 #               uncompressing if needed
 #   
-#   Copyright:  (c) Dr. Andrew C. R. Martin 2010
+#   Copyright:  (c) Dr. Andrew C. R. Martin 2010-2014
 #   Author:     Dr. Andrew C. R. Martin
 #   EMail:      andrew@bioinf.org.uk
 #               
@@ -64,6 +64,9 @@
 #   V1.0   24.08.10   Original   By: ACRM
 #   V1.1   09.09.10   Fixed a bug in cleanup when fast mode is used
 #   V1.2   04.11.10   Added regex matching
+#   V1.3   28.03.14   Checks that something is found in the remote
+#                     directory and doesn't do the cleanup if there
+#                     wasn't anything (e.g. the URL failed)
 #
 #*************************************************************************
 use LWP::Simple;
@@ -240,8 +243,8 @@ are directories";
         # 28.03.14 Added check that the dir contains something
         if(($nfiles == 0) && ($ndirs == 0))
         {
-            fprintf STDERR "No files or directories found in URL: $url\n";
-            fprintf STDERR "   not performing cleanup\n";
+            printf STDERR "No files or directories found in URL: $url\n";
+            printf STDERR "   ...not performing cleanup\n";
         }
         else
         {
@@ -734,11 +737,12 @@ sub TrimFileList
 # 19.08.10  Original   By: ACRM
 # 09.09.10  V1.1
 # 04.11.10  V1.2
+# 28.03.14  V1.3
 sub Usage
 {
     print <<__EOF;
 
-ftpmirror V1.2 (c) 2010, Dr. Andrew C.R Martin
+ftpmirror V1.3 (c) 2010-2014, Dr. Andrew C.R Martin
 
 Usage: ftpmirror [-debug[=n]] [-quiet] config_file
        -debug    Turn on debugging information
