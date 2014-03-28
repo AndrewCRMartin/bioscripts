@@ -1,4 +1,4 @@
-#!/acrm/usr/local/bin/perltest -s
+#!/acrm/usr/local/bin/perl -s
 #*************************************************************************
 #
 #   Program:    ftpmirror
@@ -135,6 +135,8 @@ sub HandleRequest
     my($url, $destination, $recurse, $compress, $fileonly, $wget, 
        $retry, $noclean, $fast, $regex, $exclregex) = @_;
 
+    my($nfiles, $ndirs);
+
     print "Handling $url\n" if(!defined($::quiet));
 
     if($fileonly)               # It's a file
@@ -168,7 +170,7 @@ are directories";
             $options = "" if(defined($::debug));
             `wget $options --output-document=$tfile --tries=$retry --waitretry=60 $url`;
             # ...and extract list of files and directories it contains
-            ParseWgetFile($tfile, \@files, \@dirs);
+            ($nfiles, $ndirs) = ParseWgetFile($tfile, \@files, \@dirs);
             unlink $tfile;
 
             # Make a copy of the full file list so that we know what 
@@ -188,14 +190,15 @@ are directories";
             # Just use the LWP::Simple method to grab the directory...
             $remotedir = get $url;
             # ...and extract list of files and directories it contains
-            ParseRemoteDir($remotedir, \@files, \@dirs);
+            ($nfiles, $ndirs) = ParseRemoteDir($remotedir, \@files, \@dirs);
 
             # Make a copy of the full file list so that we know what 
             # files should be in the directory if we are using fast mode 
             # and trimming the list of files to be copied
             @fullfilelist = @files;
         }
-                
+
+        
         # Run through the files listed in the remote directory, 
         # grabbing them
         my $count = 0;
@@ -233,10 +236,20 @@ are directories";
             }
         }
 
-        # Clean up any local files that have gone away on the remote 
-        # machine
-        CleanDirectory($destination, \@fullfilelist, \@dirs, $compress, 
-                       $noclean);
+
+        # 28.03.14 Added check that the dir contains something
+        if(($nfiles == 0) && ($ndirs == 0))
+        {
+            fprintf STDERR "No files or directories found in URL: $url\n";
+            fprintf STDERR "   not performing cleanup\n";
+        }
+        else
+        {
+            # Clean up any local files that have gone away on the remote 
+            # machine
+            CleanDirectory($destination, \@fullfilelist, \@dirs, $compress, 
+                           $noclean);
+        }
 
         # If recursion is switched on then recursively handle each of 
         # sub-directories contained in this directory
@@ -375,6 +388,7 @@ $filename\n";
 # files and directories
 #
 # 19.08.10  Original   By: ACRM
+# 28.03.13  Returns count of files and directories
 sub ParseRemoteDir
 {
     my($remotedir, $pFiles, $pDirs) = @_;
@@ -392,6 +406,8 @@ sub ParseRemoteDir
             push @$pFiles, $filename;
         }
     }
+
+    return(scalar(@$pFiles), scalar(@$pDirs));
 }
 
 #*************************************************************************
@@ -624,6 +640,7 @@ sub ParseConfigLine
 # directories
 #
 # 19.08.10  Original   By: ACRM
+# 28.03.14  Added check on count of files and directories and return these
 sub ParseWgetFile
 {
     my($filename, $pFiles, $pDirs) = @_;
@@ -646,6 +663,8 @@ sub ParseWgetFile
         }
     }
     close FILE;
+
+    return(scalar(@$pFiles), scalar(@$pDirs));
 }
 
 #*************************************************************************
