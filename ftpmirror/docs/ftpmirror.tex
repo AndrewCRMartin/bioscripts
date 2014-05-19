@@ -69,6 +69,16 @@ following effects:
 You can also run the program with a \verb|-quiet| flag to suppress all
 output about progress of what files are being downloaded or removed.
 
+As of V1.4 (19.05.14), the default behaviour is not to delete any
+local files if more than 50\% of files have gone away on the remote
+compared with the current local copy. This is designed to prevent
+problems with the connection dropping while getting the remote
+directory listing. The \verb|-forcedelete| option overrides this behaviour 
+for all mirrors and deletes the files anyway. You can also use
+\verb|forcedelete| option in the config file for an individual mirror
+if you know it is very dynamic and often deletes a lot of files.
+
+
 \section{The configuration file}
 The configuration file consists of lines with two compulsory fields
 (the source and destination) and optional fields containing flags as
@@ -119,6 +129,16 @@ Remaining fields are flags:
                   A value of 0 will keep trying indefinitely.
 \item[noclean]    do not clean up local files that have gone away on the
                   remote machine
+\item[forcedelete] As of V1.4 (19.05.14), the default behaviour is not
+                   to delete any local files if more than 50\% of
+                   files have gone away on the remote compared with
+                   the current local copy. This is designed to prevent
+                   problems with the connection dropping while getting
+                   the remote directory listing. The forcedelete
+                   option overrides this behaviour and deletes the
+                   files anyway. You can also use \verb|-forcedelete|
+                   on the command line to achieve the same thing for
+                   all mirrors.
 \item[fast] just checks if files have appeared/disappeared rather than
                   checking the date-stamps on the files. This means
                   that if the content of a file has changed, that will
