@@ -4,8 +4,8 @@
 #   Program:    ftpmirror
 #   File:       ftpmirror.pl
 #   
-#   Version:    V1.3
-#   Date:       28.03.14
+#   Version:    V1.4
+#   Date:       19.05.14
 #   Function:   Mirror an FTP site dealing with compressing and 
 #               uncompressing if needed
 #   
@@ -37,24 +37,27 @@
 #   Usage:
 #   ======
 #
-# ftpmirror [-debug] [-h] [-quiet] config_file
+# ftpmirror [-debug] [-h] [-quiet] [-forcedelete] config_file
 #
 # Note debug can be set to -debug=2 of -debug=3 to get more debugging info
 #
 # Configuration file consists of
 # Field 1: Source URL
 # Field 2: Destination directory (may be also be a file) 
-# Flags: recurse    - recurse into lower directories
-#        decompress - decompress remote compressed files
-#        compress   - compress remote uncompressed files
-#        file       - this is a single file not a directory
-#        wget       - use wget for big directories
-#        retry=n    - number of wget retries (Default is 1. A value of 0
-#                     will keep trying indefintely)
-#        noclean    - do not clean up files that have gone away on the
-#                     remote machine
-#        fast       - just checks if files have appeared/disappeared
-#                     rather than checking the date-stamps on the files
+# Flags: recurse     - recurse into lower directories
+#        decompress  - decompress remote compressed files
+#        compress    - compress remote uncompressed files
+#        file        - this is a single file not a directory
+#        wget        - use wget for big directories
+#        retry=n     - number of wget retries (Default is 1. A value of 0
+#                      will keep trying indefintely)
+#        noclean     - do not clean up files that have gone away on the
+#                      remote machine
+#        fast        - just checks if files have appeared/disappeared
+#                      rather than checking the date-stamps on the files
+#        forcedelete - normally won't delete anything if number of entries
+#                      has reduced by >50% - this forces it to do so
+#                      (can also be on the command line)
 #
 #*************************************************************************
 #
@@ -67,6 +70,9 @@
 #   V1.3   28.03.14   Checks that something is found in the remote
 #                     directory and doesn't do the cleanup if there
 #                     wasn't anything (e.g. the URL failed)
+#   V1.4   19.05.14   No no longer deletes files if >50% have gone. Added
+#                     -forcedelete or FORCEDELETE option to change this
+#                     behaviour
 #
 #*************************************************************************
 use LWP::Simple;
@@ -78,6 +84,7 @@ use strict;
 # 19.08.10  Original   By: ACRM
 # 24.08.10  Added $fast
 # 04.11.10  Added $regex and $exclregex
+# 19.05.14  Added $forcedelete
 if(defined($::h))
 {
     Usage();
@@ -95,7 +102,9 @@ while(<>)
     {
         # Parse the line from the config file
         my($url, $destination, $recurse, $compress, $file, $wget, 
-           $retry, $noclean, $fast, $regex, $exclregex) = ParseConfigLine($_);
+           $retry, $noclean, $fast, $regex, $exclregex, $fd) = ParseConfigLine($_);
+
+        my $forcedelete = ((defined($::forcedelete) || $fd)?1:0);
 
         if(defined($::debug))
         {
@@ -111,6 +120,15 @@ while(<>)
             print "FAST:        $fast\n";
             print "REGEX:       $regex\n";
             print "EXCL:        $exclregex\n";
+            print "FORCEDELETE: $forcedelete";
+            if(defined($::forcedelete))
+            {
+                print " (from command line)\n";
+            }
+            else
+            {
+                print "\n";
+            }
         }
 
         if(!$::quiet && $fast)
@@ -121,7 +139,8 @@ while(<>)
 
         # Now actually process the line
         HandleRequest($url, $destination, $recurse, $compress, $file, 
-                      $wget, $retry, $noclean, $fast, $regex, $exclregex);
+                      $wget, $retry, $noclean, $fast, $regex, $exclregex,
+                      $forcedelete);
     }
 }
 
@@ -133,10 +152,11 @@ while(<>)
 # 09.09.10  Added @fullfilelist as it was trying to delete all non-new
 #           files in fast mode
 # 04.11.10  Added $regex and $exclregex
+# 19.05.14  Added $forcedelete parameter
 sub HandleRequest
 {
     my($url, $destination, $recurse, $compress, $fileonly, $wget, 
-       $retry, $noclean, $fast, $regex, $exclregex) = @_;
+       $retry, $noclean, $fast, $regex, $exclregex, $forcedelete) = @_;
 
     my($nfiles, $ndirs);
 
@@ -170,11 +190,17 @@ are directories";
             # Using wget, we grab the directory to a temporary file...
             my $tfile = "/tmp/ftpmirror_$$.lis";
             my $options = "--quiet";
-            $options = "" if(defined($::debug));
+            if(defined($::debug))
+            {
+                print "Getting file list using wget to $tfile\n";
+                $options = "";
+            }
             `wget $options --output-document=$tfile --tries=$retry --waitretry=60 $url`;
             # ...and extract list of files and directories it contains
             ($nfiles, $ndirs) = ParseWgetFile($tfile, \@files, \@dirs);
             unlink $tfile;
+
+            print "Found $nfiles remote files and $ndirs remote directories\n" if(defined($::debug));
 
             # Make a copy of the full file list so that we know what 
             # files should be in the directory if we are using fast mode 
@@ -185,6 +211,7 @@ are directories";
             # that aren't there already
             if($fast)
             {
+                print "Fast mode set - trimming file list\n" if(defined($::debug));
                 @files = TrimFileList($destination, $compress, @files);
             }
         }
@@ -251,7 +278,7 @@ are directories";
             # Clean up any local files that have gone away on the remote 
             # machine
             CleanDirectory($destination, \@fullfilelist, \@dirs, $compress, 
-                           $noclean);
+                           $noclean, $forcedelete);
         }
 
         # If recursion is switched on then recursively handle each of 
@@ -266,7 +293,7 @@ are directories";
                               $compress, 
                               0, # Fileonly
                               $wget, $retry, $noclean, $fast, 
-                              $regex, $exclregex);
+                              $regex, $exclregex, $forcedelete);
             }
         }
     }
@@ -281,9 +308,11 @@ are directories";
 # 19.08.10  Original   By: ACRM
 # 24.08.10  $noclean passed in here so it can report files that should
 #           have been removed
+# 19.05.14  Added check on directory shrinking by 50% and $forcedelete 
+#           parameter
 sub CleanDirectory
 {
-    my($destination, $pFiles, $pDirs, $compress, $noclean) = @_;
+    my($destination, $pFiles, $pDirs, $compress, $noclean, $forcedelete) = @_;
     my(%fileHash, %dirHash);
 
     # For debugging print the 1st 10 entries from the lists of remote 
@@ -303,6 +332,9 @@ sub CleanDirectory
     # If we have found *something* on the remote server
     if(@$pFiles || @$pDirs)
     {
+        # 19.05.14 Check number of remote files and directories
+        my $nRemoteFilesAndDirs = scalar(@$pFiles) + scalar(@$pDirs);
+
         # Create a hash of the file and directory lists for fast lookups
         foreach my $file (@$pFiles)
         {
@@ -318,6 +350,20 @@ sub CleanDirectory
         opendir(DIR, $destination) || 
             die "Can't read directory: $destination";
         my @files = grep !/^\./, readdir(DIR);
+
+        # 19.05.14 Check number of local files and directories
+        my $nLocalFilesAndDirs = scalar(@files);
+
+        # 19.05.14 If remote total is <50% of local total, something has
+        # probably gone wrong, so exit unless FORCEDELETE has been set
+        if(($nRemoteFilesAndDirs < ($nLocalFilesAndDirs / 2)) &&
+           !$forcedelete)
+        {
+            print "Remote directory has shrunk be > 50%, not deleting files\n";
+            print "   Use FORCEDELETE or -forcedelete option to override\n";
+            return;
+        }
+            
         foreach my $file (@files)
         {
             my $filename = BuildName($destination, $file, 0);
@@ -554,6 +600,7 @@ sub BuildName
 # 19.08.10  Original   By: ACRM
 # 24.08.10  Added FAST
 # 04.11.10  Added REGEX and EXCL
+# 19.05.14  Added FORCEDELETE
 sub ParseConfigLine
 {
     my($line)     = @_;
@@ -567,6 +614,7 @@ sub ParseConfigLine
     my $fast      = 0;
     my $regex     = "";
     my $exclregex = "";
+    my $fd        = 0;
 
     # Extract fields from configuration line
     my @fields = split(/\s+/, $line);
@@ -633,9 +681,13 @@ sub ParseConfigLine
         {
             $fast = 1;
         }
+        elsif ($field =~ /^FORCEDELETE$/i)
+        {
+            $fd = 1;
+        }
     }
     return($url, $destination, $recurse, $compress, $file, $wget, 
-           $retry, $noclean, $fast, $regex, $exclregex);
+           $retry, $noclean, $fast, $regex, $exclregex, $fd);
 }
     
 #*************************************************************************
@@ -738,46 +790,55 @@ sub TrimFileList
 # 09.09.10  V1.1
 # 04.11.10  V1.2
 # 28.03.14  V1.3
+# 19.05.14  V1.4
 sub Usage
 {
     print <<__EOF;
 
-ftpmirror V1.3 (c) 2010-2014, Dr. Andrew C.R Martin
+ftpmirror V1.4 (c) 2010-2014, Dr. Andrew C.R Martin
 
-Usage: ftpmirror [-debug[=n]] [-quiet] config_file
-       -debug    Turn on debugging information
-                 Setting to -debug=2 restricts downloading a maximum 
-                 of 10 files from each directory
-                 Setting to -debug=3 turns on additional information
-                 about remote files which controls cleaning of local files
-                 that have gone away
-       -quiet    Prints no information about files being downloaded
-                 or removed
-       -verbose  Print the names of files skipped through not matching
-                 REGEX or from matching EXCL
+Usage: ftpmirror [-debug[=n]] [-quiet] [-verbose] [-forcedelete] config_file
+       -debug       Turn on debugging information
+                    Setting to -debug=2 restricts downloading a maximum 
+                    of 10 files from each directory
+                    Setting to -debug=3 turns on additional information
+                    about remote files which controls cleaning of local files
+                    that have gone away
+       -quiet       Prints no information about files being downloaded
+                    or removed
+       -verbose     Print the names of files skipped through not matching
+                    REGEX or from matching EXCL
+       -forcedelete Normally will not delete files if >50% have gone away.
+                    This overrides that (as does FORCEDELETE config option)
 
 The configuration file consists of two required fields followed by
 optional flags which may be specified in any order:
 
 Field 1: Source URL
 Field 2: Destination directory (may be also be a file) 
-Flags:   recurse    - recurse into lower directories
-         decompress - decompress remote compressed files
-         compress   - compress remote uncompressed files
-         file       - this is a single file not a directory
-         wget       - use wget for big directories
-         retry=n    - number of wget retries (Default is 1).
-                      A value of 0 will keep trying indefintely.
-         noclean    - do not clean up files that have gone away on the
-                      remote machine
-         fast       - just checks if files have appeared/disappeared
-                      rather than checking the date-stamps on the files
-         regex=r    - only downloads files if the filename (excluding 
-                      the path) matches the specified Perl regular 
-                      expression
-         excl=r     - skip files if the full URL filename path matches
-                      the specified Perl regular expression. This
-                      overrides matching with regex=
+Flags:   recurse     - recurse into lower directories
+         decompress  - decompress remote compressed files
+         compress    - compress remote uncompressed files
+         file        - this is a single file not a directory
+         wget        - use wget for big directories
+         retry=n     - number of wget retries (Default is 1).
+                       A value of 0 will keep trying indefintely.
+         noclean     - do not clean up files that have gone away on the
+                       remote machine
+         forcedelete - Normally cleanup will not delete files if >50% 
+                       have gone away (as this is usually some sort of
+                       error). This overrides that behaviour (as does
+                       the -forcedelete command line option). Use with
+                       caution unless you know that the contents of the
+                       remote directory is very dynamic!
+         fast        - just checks if files have appeared/disappeared
+                       rather than checking the date-stamps on the files
+         regex=r     - only downloads files if the filename (excluding 
+                       the path) matches the specified Perl regular 
+                       expression
+         excl=r      - skip files if the full URL filename path matches
+                       the specified Perl regular expression. This
+                       overrides matching with regex=
 
 ftpmirror is a simple program for mirroring remote FTP sites, but
 which allows remote uncompressed files to be compressed locally and
