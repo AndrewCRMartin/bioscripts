@@ -1,11 +1,11 @@
-#!/acrm/usr/local/bin/perl -s
+#!/usr/bin/perl -s
 #*************************************************************************
 #
 #   Program:    ftpmirror
 #   File:       ftpmirror.pl
 #   
-#   Version:    V1.4
-#   Date:       19.05.14
+#   Version:    V1.5
+#   Date:       05.11.14
 #   Function:   Mirror an FTP site dealing with compressing and 
 #               uncompressing if needed
 #   
@@ -73,10 +73,18 @@
 #   V1.4   19.05.14   No no longer deletes files if >50% have gone. Added
 #                     -forcedelete or FORCEDELETE option to change this
 #                     behaviour
+#   V1.5   05.11.14   Uses system installed Perl and uses TryUse() to
+#                     issue a sensible error message if LWP::Simple
+#                     isn't installed
 #
 #*************************************************************************
-use LWP::Simple;
 use strict;
+if(!TryUse("LWP::Simple"))
+{
+    print STDERR "You must install the LWP package to use this script\n";
+    exit 1;
+}
+
 
 #*************************************************************************
 # Main code
@@ -102,7 +110,8 @@ while(<>)
     {
         # Parse the line from the config file
         my($url, $destination, $recurse, $compress, $file, $wget, 
-           $retry, $noclean, $fast, $regex, $exclregex, $fd) = ParseConfigLine($_);
+           $retry, $noclean, $fast, $regex, $exclregex, $fd) = 
+               ParseConfigLine($_);
 
         my $forcedelete = ((defined($::forcedelete) || $fd)?1:0);
 
@@ -171,8 +180,7 @@ sub HandleRequest
             $filename = GetFilename($url);
             if($filename eq "")
             {
-                die "No filename specified - both URL and DESTINATION \
-are directories";
+                die "No filename specified - both URL and DESTINATION are directories";
             }
         }
         CreateDirIfNeeded($dirname);
@@ -200,7 +208,10 @@ are directories";
             ($nfiles, $ndirs) = ParseWgetFile($tfile, \@files, \@dirs);
             unlink $tfile;
 
-            print "Found $nfiles remote files and $ndirs remote directories\n" if(defined($::debug));
+            if(defined($::debug))
+            {
+                print "Found $nfiles remote files and $ndirs remote directories\n";
+            }
 
             # Make a copy of the full file list so that we know what 
             # files should be in the directory if we are using fast mode 
@@ -211,7 +222,10 @@ are directories";
             # that aren't there already
             if($fast)
             {
-                print "Fast mode set - trimming file list\n" if(defined($::debug));
+                if(defined($::debug))
+                {
+                    print "Fast mode set - trimming file list\n";
+                }
                 @files = TrimFileList($destination, $compress, @files);
             }
         }
@@ -220,7 +234,8 @@ are directories";
             # Just use the LWP::Simple method to grab the directory...
             $remotedir = get $url;
             # ...and extract list of files and directories it contains
-            ($nfiles, $ndirs) = ParseRemoteDir($remotedir, \@files, \@dirs);
+            ($nfiles, $ndirs) = 
+                ParseRemoteDir($remotedir, \@files, \@dirs);
 
             # Make a copy of the full file list so that we know what 
             # files should be in the directory if we are using fast mode 
@@ -238,7 +253,8 @@ are directories";
 
             if(($regex eq "") || ($filename =~ /$regex/)) # 04.11.10
             {
-                if(($exclregex eq "") || (!($fullurl =~ /$exclregex/))) # 04.11.10
+                # 04.11.10
+                if(($exclregex eq "") || (!($fullurl =~ /$exclregex/))) 
                 {
                     # Grabs a file and handles compression as required
                     MirrorCompressFile($fullurl, $destination, 
@@ -277,8 +293,8 @@ are directories";
         {
             # Clean up any local files that have gone away on the remote 
             # machine
-            CleanDirectory($destination, \@fullfilelist, \@dirs, $compress, 
-                           $noclean, $forcedelete);
+            CleanDirectory($destination, \@fullfilelist, \@dirs, 
+                           $compress, $noclean, $forcedelete);
         }
 
         # If recursion is switched on then recursively handle each of 
@@ -312,7 +328,8 @@ are directories";
 #           parameter
 sub CleanDirectory
 {
-    my($destination, $pFiles, $pDirs, $compress, $noclean, $forcedelete) = @_;
+    my($destination, $pFiles, $pDirs, $compress, 
+       $noclean, $forcedelete) = @_;
     my(%fileHash, %dirHash);
 
     # For debugging print the 1st 10 entries from the lists of remote 
@@ -375,8 +392,7 @@ sub CleanDirectory
                     {
                         if(!defined($::quiet))
                         {
-                            print "Directory should be removed: \
-$filename\n";
+                            print "Directory should be removed: $filename\n";
                         }
                     }
                     else
@@ -723,6 +739,12 @@ sub ParseWgetFile
 }
 
 #*************************************************************************
+# Used in FAST mode to remove files from the list to be downloaded
+# that are already present. Note that this will not check for changes
+# in the files, so should not be used for sites where the file content
+# is dynamic
+#
+# 24.08.10  Original   By: ACRM
 sub TrimFileList
 {
     my($destination, $compress, @infiles) = @_;
@@ -784,6 +806,22 @@ sub TrimFileList
 }
 
 #*************************************************************************
+# Tries to load a module
+#
+# 05.11.14  Original   By: ACRM
+sub TryUse
+{
+    my($module) = @_;
+    eval("use $module");
+    if($@) 
+    {
+        #print "\$@ = $@\n";
+        return(0);
+    } 
+    return(1);
+}
+
+#*************************************************************************
 # Prints a usage message
 #
 # 19.08.10  Original   By: ACRM
@@ -791,11 +829,12 @@ sub TrimFileList
 # 04.11.10  V1.2
 # 28.03.14  V1.3
 # 19.05.14  V1.4
+# 05.11.14  V1.5
 sub Usage
 {
     print <<__EOF;
 
-ftpmirror V1.4 (c) 2010-2014, Dr. Andrew C.R Martin
+ftpmirror V1.5 (c) 2010-2014, Dr. Andrew C.R Martin
 
 Usage: ftpmirror [-debug[=n]] [-quiet] [-verbose] [-forcedelete] config_file
        -debug       Turn on debugging information
