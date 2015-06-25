@@ -4,11 +4,11 @@
 #   Program:    grabpdb
 #   File:       grabpdb.pl
 #   
-#   Version:    V1.1
-#   Date:       01.07.13
+#   Version:    V1.2
+#   Date:       25.06.15
 #   Function:   Grab a PDB file from the PDB archive
 #   
-#   Copyright:  (c) Dr. Andrew C. R. Martin, UCL, 2013
+#   Copyright:  (c) Dr. Andrew C. R. Martin, UCL, 2013-2015
 #   Author:     Dr. Andrew C. R. Martin
 #   Address:    Institute of Structural and Molecular Biology
 #               Division of Biosciences
@@ -48,17 +48,20 @@
 #   =================
 #   V1.0   28.02.13  Original
 #   V1.1   01.07.13  Added file-based compression
+#   V1.2   25.06.15  Added -x flag and PDBML (XML) download
 #
 #*************************************************************************
 use LWP::UserAgent;
 use strict;
 
 #*************************************************************************
-$::URLtemplate = "ftp://ftp.ebi.ac.uk/pub/databases/pdb/data/structures/all/pdb/pdb%s.ent.gz";
-$::OutTemplate = "pdb%s.ent";
-$::LowerCase   = 1;
-$::zcat        = "zcat";
-$::gunzip      = "gunzip";
+$::URLtemplate  = "ftp://ftp.ebi.ac.uk/pub/databases/pdb/data/structures/all/pdb/pdb%s.ent.gz";
+$::XURLtemplate = "ftp://ftp.ebi.ac.uk/pub/databases/pdb/data/structures/all/XML/%s.xml.gz";
+$::OutTemplate  = "pdb%s.ent";
+$::XOutTemplate  = "%s.xml";
+$::LowerCase    = 1;
+$::zcat         = "zcat";
+$::gunzip       = "gunzip";
 #*************************************************************************
 
 UsageDie() if(defined($::h) || (scalar(@ARGV) == 0));
@@ -67,8 +70,8 @@ UsageDie() if(defined($::h) || (scalar(@ARGV) == 0));
 my $pdb = shift @ARGV;
 
 # Create the URL and output filename
-my $url = CreateURL($pdb);
-my $file = CreateFilename($pdb, $::z, @ARGV);
+my $url = CreateURL($pdb, defined($::x));
+my $file = CreateFilename($pdb, $::z, defined($::x), @ARGV);
 
 # Grab the file
 print "Grabbing: $url\n" if(defined($::v) || defined($::d));
@@ -127,16 +130,17 @@ sub WriteData
 # If the $compressed flag is set then ".gz" is added to the filename
 #
 # 28.02.13 Original   By: ACRM
+# 25.06.15 Added $pdbml flag
 sub CreateFilename
 {
-    my($pdb, $compressed, @args) = @_;
+    my($pdb, $compressed, $pdbml, @args) = @_;
 
     if(scalar(@args))
     {
         return($args[0]);
     }
 
-    my $fileName = sprintf($::OutTemplate, $pdb);
+    my $fileName = sprintf((($pdbml)?($::XOutTemplate):($::OutTemplate)), $pdb);
     if($compressed)
     {
         $fileName .= ".gz";
@@ -152,11 +156,13 @@ sub CreateFilename
 # Creates a URL from the PDB code and the global URL template
 #
 # 28.02.13 Original   By: ACRM
+# 25.06.15 Added pdbml flag
 sub CreateURL
 {
-    my($pdb) = @_;
+    my($pdb, $pdbml) = @_;
+
     $pdb = "\L$pdb" if($::LowerCase);
-    my $url = sprintf($::URLtemplate, $pdb);
+    my $url = sprintf((($pdbml)?($::XURLtemplate):($::URLtemplate)), $pdb);
     return($url);
 }
 
@@ -234,22 +240,26 @@ sub GetFile
 # Prints a usage message and exits
 #
 # 28.02.13 Original   By: ACRM
+# 25.06.15 Added -x
 sub UsageDie
 {
-    my $autoname = sprintf($::OutTemplate, "XXXX");
+    my $autoname  = sprintf($::OutTemplate, "XXXX");
+    my $Xautoname = sprintf($::XOutTemplate, "XXXX");
     print <<__EOF;
 
-grabpdb V1.1 (c) Dr. Andrew C.R. Martin, UCL
-Usage: grabpdb [-z][-v][-d] pdbcode [filename|-|stdout]
+grabpdb V1.2 (c) Dr. Andrew C.R. Martin, UCL
+Usage: grabpdb [-x][-z][-v][-d] pdbcode [filename|-|stdout]
+       -x             Grab the PDBML (XML) file
        -z             Keep the file compressed
        -v             Verbose
        -d             Debug mode (prints more information)
        pdbcode        PDB code to grab (upper or lower case)
-       filename       Output file to write (default to $autoname)
+       filename       Output file to write 
+                      (defaults to $autoname or $Xautoname)
        - (or stdout)  Output to standard output
 
-Grabs a PDB file from an FTP site and writes it to a local file or to
-standard output. By default, remote files are decompressed.
+Grabs a PDB or PDBML file from an FTP site and writes it to a local 
+file or to standard output. By default, remote files are decompressed.
 
 __EOF
 
