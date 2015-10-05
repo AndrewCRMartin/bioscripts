@@ -4,8 +4,8 @@
 #   Program:    csv2arff
 #   File:       csv2arff.pl
 #   
-#   Version:    V1.3.1
-#   Date:       04.02.14
+#   Version:    V1.4
+#   Date:       05.10.15
 #   Function:   Convert CSV file to ARFF format
 #   
 #   Copyright:  (c) Dr. Andrew C. R. Martin, UCL, 2012-2014
@@ -65,6 +65,9 @@
 #                    -iddiscard=file used with -id to save discarded IDs
 #   V1.3   19.11.13  Added -minus and reads DOS files properly
 #   V1.3.1 04.02.14  Improved usage message
+#   V1.4   05.10.15  Added -skip to skip records with missing valued
+#                    - the default is now to substitute a ? for missing 
+#                    values
 #
 #*************************************************************************
 use strict;
@@ -553,8 +556,15 @@ sub WriteARFF
             
             if($datum eq "")    # Check the line is complete
             {
-                $valid = 0;
-                last;
+                if(defined($::skip))
+                {
+                    $valid = 0;
+                    last;
+                }
+                else
+                {
+                    $datum = '?';
+                }
             }
             else
             {   # Convert to Boolean if needed
@@ -562,9 +572,10 @@ sub WriteARFF
                 {
                     $datum = (($datum == 1)?"TRUE":"FALSE");
                 }
-                # Append to the output string
-                $outputString .= $datum . ",";
-              }
+            }
+
+            # Append to the output string
+            $outputString .= $datum . ",";
             $attribCount++;
         }
 
@@ -884,12 +895,16 @@ sub UsageDie
 {
     print <<__EOF;
 
-csv2arff V1.3.1 (c) 2012-2014, UCL, Dr. Andrew C.R. Martin, Nouf S. Al-Numair
+csv2arff V1.4 (c) 2012-2015, UCL, Dr. Andrew C.R. Martin, Nouf S. Al-Numair
 
-Usage: csv2arff [-ni][-no][-auto] [-norm[=file][-relax][-minus] [-write=file]]
-           [-title=title][-class=a,b,c] [-id=a [-idfile=file]
-           [-limit=n [-discard=file] [-id=a -iddiscard=file]]
-           (-inputs=a,b,c|inputs.dat) output [file.csv] > file.arff
+Usage: csv2arff [-ni][-no][-auto][-skip]
+                [-norm[=file][-relax][-minus][-write=file]]
+                [-title=title][-class=a,b,c] 
+                [-id=a [-idfile=file]]
+                [-id=a [-iddiscard=file]]
+                [-limit=n [-discard=file] [-id=a [-idfile=file]]]
+                [-limit=n [-discard=file] [-id=a [-iddiscard=file]]]
+                (-inputs=a,b,c|inputs.dat) output [file.csv] > file.arff
 
 REQUIRED PARAMETERS
        -inputs=a,b,c   - Comma-separated list of fields to be used as inputs
@@ -913,6 +928,7 @@ OPTIONS
        -no             - do not convert binary output to nominal Boolean
        -auto           - remove redundant input attributes
        -title=title    - specify a title for the data file
+       -skip           - Skip records with missing values
 
    Normalization
        -norm[=file]    - normalize all numeric attributes to the range 0...1
