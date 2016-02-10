@@ -77,6 +77,8 @@
 #                     issue a sensible error message if LWP::Simple
 #                     isn't installed
 #   V1.6   10.02.16   Fixed problems with using LWP::Simple
+#                     Now deals with symbolic links in FTP directories
+#                     with LWP::Simple
 #
 #*************************************************************************
 use strict;
@@ -168,12 +170,13 @@ while(<>)
 # 04.11.10  Added $regex and $exclregex
 # 19.05.14  Added $forcedelete parameter
 # 10.02.16  Added parentheses on LWP::Simple get() call
+#           Added handling of links
 sub HandleRequest
 {
     my($url, $destination, $recurse, $compress, $fileonly, $wget, 
        $retry, $noclean, $fast, $regex, $exclregex, $forcedelete) = @_;
 
-    my($nfiles, $ndirs);
+    my($nfiles, $ndirs, $nlinks);
 
     print "Handling $url\n" if(!defined($::quiet));
 
@@ -195,7 +198,7 @@ sub HandleRequest
     else                        # It's a directory
     {
         my $remotedir;
-        my (@files, @dirs, @fullfilelist);
+        my (@files, @dirs, @linkNames, @linkTargets, @fullfilelist);
 
         CreateDirIfNeeded($destination);
 
@@ -241,8 +244,9 @@ sub HandleRequest
             # 10.02.16 Added parentheses
             $remotedir = get($url);
             # ...and extract list of files and directories it contains
-            ($nfiles, $ndirs) = 
-                ParseRemoteDir($remotedir, \@files, \@dirs);
+            ($nfiles, $ndirs, $nlinks) = 
+                ParseRemoteDir($remotedir, \@files, \@dirs, 
+                               \@linkNames, \@linkTargets);
 
             # Make a copy of the full file list so that we know what 
             # files should be in the directory if we are using fast mode 
@@ -289,6 +293,18 @@ sub HandleRequest
             }
         }
 
+        # 10.02.16 Create any links
+        for(my $linkcount=0; $linkcount<$nlinks; $linkcount++)
+        {
+            my $linkName   = $linkNames[$linkcount];
+            my $linkTarget = $linkTargets[$linkcount];
+            print STDERR "Creating symbolic link: $linkName -> $linkTarget\n" if(defined($::verbose));
+
+            my $exe = "(cd $destination; rm -f $linkName)";
+            `$exe`;
+            $exe = "(cd $destination; ln -sf $linkTarget $linkName)";
+            `$exe`;
+        }
 
         # 28.03.14 Added check that the dir contains something
         if(($nfiles == 0) && ($ndirs == 0))
@@ -461,9 +477,10 @@ sub CleanDirectory
 #
 # 19.08.10  Original   By: ACRM
 # 28.03.13  Returns count of files and directories
+# 10.02.15  Added handling of links
 sub ParseRemoteDir
 {
-    my($remotedir, $pFiles, $pDirs) = @_;
+    my($remotedir, $pFiles, $pDirs, $pLinkNames, $pLinkTargets) = @_;
     my @lines = split(/\n/, $remotedir);
     foreach my $line (@lines)
     {
@@ -473,13 +490,19 @@ sub ParseRemoteDir
         {
             push @$pDirs, $filename;
         }
+        elsif($line =~ /^l/)
+        {
+            push @$pLinkTargets, $filename;
+            $filename = $fields[$#fields-2];
+            push @$pLinkNames, $filename;
+        }
         else
         {
             push @$pFiles, $filename;
         }
     }
 
-    return(scalar(@$pFiles), scalar(@$pDirs));
+    return(scalar(@$pFiles), scalar(@$pDirs), scalar(@$pLinkTargets));
 }
 
 #*************************************************************************
