@@ -4,12 +4,12 @@
 #   Program:    ftpmirror
 #   File:       ftpmirror.pl
 #   
-#   Version:    V1.5
-#   Date:       05.11.14
+#   Version:    V1.6
+#   Date:       10.02.16
 #   Function:   Mirror an FTP site dealing with compressing and 
 #               uncompressing if needed
 #   
-#   Copyright:  (c) Dr. Andrew C. R. Martin 2010-2014
+#   Copyright:  (c) Dr. Andrew C. R. Martin 2010-2016
 #   Author:     Dr. Andrew C. R. Martin
 #   EMail:      andrew@bioinf.org.uk
 #               
@@ -76,6 +76,7 @@
 #   V1.5   05.11.14   Uses system installed Perl and uses TryUse() to
 #                     issue a sensible error message if LWP::Simple
 #                     isn't installed
+#   V1.6   10.02.16   Fixed problems with using LWP::Simple
 #
 #*************************************************************************
 use strict;
@@ -83,6 +84,10 @@ if(!TryUse("LWP::Simple"))
 {
     print STDERR "You must install the LWP package to use this script\n";
     exit 1;
+}
+else                            # 10.02.16
+{
+    use LWP::Simple;
 }
 
 
@@ -162,6 +167,7 @@ while(<>)
 #           files in fast mode
 # 04.11.10  Added $regex and $exclregex
 # 19.05.14  Added $forcedelete parameter
+# 10.02.16  Added parentheses on LWP::Simple get() call
 sub HandleRequest
 {
     my($url, $destination, $recurse, $compress, $fileonly, $wget, 
@@ -232,7 +238,8 @@ sub HandleRequest
         else
         {
             # Just use the LWP::Simple method to grab the directory...
-            $remotedir = get $url;
+            # 10.02.16 Added parentheses
+            $remotedir = get($url);
             # ...and extract list of files and directories it contains
             ($nfiles, $ndirs) = 
                 ParseRemoteDir($remotedir, \@files, \@dirs);
