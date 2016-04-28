@@ -4,11 +4,11 @@
 #   Program:    grabpdb
 #   File:       grabpdb.pl
 #   
-#   Version:    V1.2
-#   Date:       25.06.15
+#   Version:    V1.3
+#   Date:       28.04.16
 #   Function:   Grab a PDB file from the PDB archive
 #   
-#   Copyright:  (c) Dr. Andrew C. R. Martin, UCL, 2013-2015
+#   Copyright:  (c) Dr. Andrew C. R. Martin, UCL, 2013-2016
 #   Author:     Dr. Andrew C. R. Martin
 #   Address:    Institute of Structural and Molecular Biology
 #               Division of Biosciences
@@ -49,6 +49,7 @@
 #   V1.0   28.02.13  Original
 #   V1.1   01.07.13  Added file-based compression
 #   V1.2   25.06.15  Added -x flag and PDBML (XML) download
+#   V1.3   28.04.15  Added -m flag and mmCIF download
 #
 #*************************************************************************
 use LWP::UserAgent;
@@ -57,21 +58,25 @@ use strict;
 #*************************************************************************
 $::URLtemplate  = "ftp://ftp.ebi.ac.uk/pub/databases/pdb/data/structures/all/pdb/pdb%s.ent.gz";
 $::XURLtemplate = "ftp://ftp.ebi.ac.uk/pub/databases/pdb/data/structures/all/XML/%s.xml.gz";
+$::MURLtemplate = "ftp://ftp.ebi.ac.uk/pub/databases/pdb/data/structures/all/mmCIF/%s.cif.gz";
 $::OutTemplate  = "pdb%s.ent";
 $::XOutTemplate  = "%s.xml";
+$::MOutTemplate  = "%s.cif";
 $::LowerCase    = 1;
 $::zcat         = "zcat";
 $::gunzip       = "gunzip";
 #*************************************************************************
 
-UsageDie() if(defined($::h) || (scalar(@ARGV) == 0));
+UsageDie() if(defined($::h)        || 
+              (scalar(@ARGV) == 0) ||
+              (defined($::x) && defined($::m)));
 
 # Grab PDB code from command line
 my $pdb = shift @ARGV;
 
 # Create the URL and output filename
-my $url = CreateURL($pdb, defined($::x));
-my $file = CreateFilename($pdb, $::z, defined($::x), @ARGV);
+my $url = CreateURL($pdb, defined($::x),defined($::m));
+my $file = CreateFilename($pdb, $::z, defined($::x), defined($::m), @ARGV);
 
 # Grab the file
 print "Grabbing: $url\n" if(defined($::v) || defined($::d));
@@ -131,16 +136,30 @@ sub WriteData
 #
 # 28.02.13 Original   By: ACRM
 # 25.06.15 Added $pdbml flag
+# 28.04.16 Added $mmcif flag
 sub CreateFilename
 {
-    my($pdb, $compressed, $pdbml, @args) = @_;
+    my($pdb, $compressed, $pdbml, $mmcif, @args) = @_;
 
     if(scalar(@args))
     {
         return($args[0]);
     }
 
-    my $fileName = sprintf((($pdbml)?($::XOutTemplate):($::OutTemplate)), $pdb);
+    my $fileName = '';
+    if($pdbml)
+    {
+        $fileName = sprintf($::XOutTemplate, $pdb);    
+    }
+    elsif($mmcif)
+    {
+        $fileName = sprintf($::MOutTemplate, $pdb);    
+    }
+    else
+    {
+        $fileName = sprintf($::OutTemplate, $pdb);    
+    }
+
     if($compressed)
     {
         $fileName .= ".gz";
@@ -157,12 +176,26 @@ sub CreateFilename
 #
 # 28.02.13 Original   By: ACRM
 # 25.06.15 Added pdbml flag
+# 28.04.16 Added mmcif flag
 sub CreateURL
 {
-    my($pdb, $pdbml) = @_;
+    my($pdb, $pdbml, $mmcif) = @_;
 
     $pdb = "\L$pdb" if($::LowerCase);
-    my $url = sprintf((($pdbml)?($::XURLtemplate):($::URLtemplate)), $pdb);
+    my $url = '';
+    if($pdbml)
+    {
+        $url = sprintf($::XURLtemplate, $pdb);
+    }
+    elsif($mmcif)
+    {
+        $url = sprintf($::MURLtemplate, $pdb);
+    }
+    else
+    {
+        $url = sprintf($::URLtemplate, $pdb);
+    }
+
     return($url);
 }
 
@@ -245,21 +278,24 @@ sub UsageDie
 {
     my $autoname  = sprintf($::OutTemplate, "XXXX");
     my $Xautoname = sprintf($::XOutTemplate, "XXXX");
+    my $Mautoname = sprintf($::MOutTemplate, "XXXX");
     print <<__EOF;
 
-grabpdb V1.2 (c) Dr. Andrew C.R. Martin, UCL
-Usage: grabpdb [-x][-z][-v][-d] pdbcode [filename|-|stdout]
+grabpdb V1.3 (c) Dr. Andrew C.R. Martin, UCL, 2013-16
+Usage: grabpdb [-x|-m][-z][-v][-d] pdbcode [filename|-|stdout]
        -x             Grab the PDBML (XML) file
+       -m             Grab the mmCIF file
        -z             Keep the file compressed
        -v             Verbose
        -d             Debug mode (prints more information)
        pdbcode        PDB code to grab (upper or lower case)
        filename       Output file to write 
-                      (defaults to $autoname or $Xautoname)
+                      (defaults to $autoname, $Xautoname,
+                      or $Mautoname)
        - (or stdout)  Output to standard output
 
-Grabs a PDB or PDBML file from an FTP site and writes it to a local 
-file or to standard output. By default, remote files are decompressed.
+Grabs a PDB, PDBML or mmCIF file from an FTP site and writes it to a 
+local file or to standard output. By default, remote files are decompressed.
 
 __EOF
 
