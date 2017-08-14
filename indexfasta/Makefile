@@ -70,6 +70,7 @@ pfiles   := $(addsuffix .src, $(pbases))
 
 
 install : $(pbases)
+	cp Makefile $(dest)
 
 %.src : %.pl
 	mkdir -p $(dest)
