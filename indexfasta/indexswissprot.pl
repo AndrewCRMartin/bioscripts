@@ -4,11 +4,11 @@
 #   Program:    indexfasta
 #   File:       indexfasta.pl
 #   
-#   Version:    V1.4
-#   Date:       30.09.08
+#   Version:    V1.1
+#   Date:       07.03.14
 #   Function:   Index the SwissProt data file
 #   
-#   Copyright:  (c) UCL / Dr. Andrew C. R. Martin 2010
+#   Copyright:  (c) UCL / Dr. Andrew C. R. Martin 2010-2014
 #   Author:     Dr. Andrew C. R. Martin
 #   Address:    Biomolecular Structure & Modelling Unit,
 #               Department of Biochemistry & Molecular Biology,
@@ -50,10 +50,13 @@
 #   Revision History:
 #   =================
 #   26.01.10 V1.0  Original
+#   07.03.14 V1.1  Handles old trEMBL datafiles where the ID was just
+#                  the same as the AC instead of AC_SPECIES
 #
 #*************************************************************************
 use strict;
 my($fname, %sprot_tell, $indexfile, $key, $pos, $count, $id, $start_pos, $ac);
+my $species;
 
 UsageDie() if(defined($::h));
 
@@ -67,19 +70,40 @@ $pos = 0;
 $start_pos = 0;
 $count = 0;
 while(<FILE>) {
-    if(/^ID\s+(\S+_\S+)\s+/)
+    if(/^ID\s+/)
     {
-        $id = $1;
+        my @fields = split;
+        $id = $fields[1];
         $start_pos = $pos;
         $count++;
         $ac = "";
+        $species = "";
     }
     elsif(/^AC\s+(.*)/)
     {
         $ac .= " " . $1;
     }
+    elsif(/^OS\s+/)
+    {
+        my @fields = split(/\s+/, $_, 2);
+        $species = $fields[1];
+    }
     elsif(/^\/\//)
     {
+        if(! ($id =~ /\_/))
+        {
+            if($species =~ /Human/)
+            {
+                $species = "HUMAN";
+            }
+            else
+            {
+                $species =~ s/\s//g;
+                $species = substr($species,0,6);
+                $species = "\U$species";
+            }
+            $id .= "_$species";
+        }
         if(defined($sprot_tell{$id}) && !defined($::q))
         {
             print "Warning: ID $id found multiple times\n";
@@ -115,7 +139,7 @@ sub UsageDie
 {
     print <<__EOF;
 
-indexswissprot V1.0 (c) 2010 UCL, Dr. Andrew C.R. Martin, 
+indexswissprot V1.1 (c) 2010-2014 UCL, Dr. Andrew C.R. Martin, 
 
 Usage: indexswissprot [-h] [-q] infile.dat indexfile.idx
        -h              this help message

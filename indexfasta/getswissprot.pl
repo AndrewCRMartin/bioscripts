@@ -4,11 +4,11 @@
 #   Program:    getswissprot
 #   File:       getswissprot.pl
 #   
-#   Version:    V1.0
-#   Date:       
+#   Version:    V1.1
+#   Date:       25.02.13
 #   Function:   
 #   
-#   Copyright:  (c) UCL / Dr. Andrew C. R. Martin 2010
+#   Copyright:  (c) UCL / Dr. Andrew C. R. Martin 2010-2013
 #   Author:     Dr. Andrew C. R. Martin
 #   Address:    Biomolecular Structure & Modelling Unit,
 #               Department of Biochemistry & Molecular Biology,
@@ -49,6 +49,9 @@
 #
 #   Revision History:
 #   =================
+#   V1.0   26.01.10  Original
+#   V1.1   25.02.13  Added ability to take multiple swissprot codes on 
+#                    the command line
 #
 #*************************************************************************
 use strict;
@@ -66,19 +69,21 @@ $indexfile = shift(@ARGV);
 open(FILE,$fname) || die "Cannot open seq file $fname";
 dbmopen %sprot_tell, $indexfile, 0666 || die "Can't dbopen $indexfile";
 
-$ac = shift(@ARGV);
-$ac = "\U$ac";
+while($ac = shift(@ARGV))
+{
+    $ac = "\U$ac";
 
-if(defined($::f))
-{
-    # Grab a FASTA format entry
-    $entry = GetFASTA($ac, \%sprot_tell);
+    if(defined($::f))
+    {
+        # Grab a FASTA format entry
+        $entry = GetFASTA($ac, \%sprot_tell);
+    }
+    else
+    {
+        $entry = GetSwissProt($ac, \%sprot_tell);
+    }
+    print "$entry";
 }
-else
-{
-    $entry = GetSwissProt($ac, \%sprot_tell);
-}
-print "$entry";
 
 # Tidy up
 dbmclose %sprot_tell;
@@ -155,15 +160,18 @@ sub UsageDie
 {
     print <<__EOF;
 
-getswissprot V1.0 (c) 2010, UCL, Dr. Andrew C.R. Martin
+getswissprot V1.1 (c) 2010-2013, UCL, Dr. Andrew C.R. Martin
 
-Usage: getswissprot.pl [-f] swissprot_file index_file sprot_code
+Usage: getswissprot.pl [-f] swissprot_file index_file sprot_code 
+                       [sprot_code...]
+
        -f               FASTA output rather than SwissProt data
        swissprot_file   SwissProt file
        index_file       Index created by indexswissprot
        sprot_code       SwissProt ID or AC
 
-Extracts a sequence from a SwissProt file using the specified index
+Extracts one of more entries from a SwissProt file using the specified 
+index file.
 
 __EOF
 
