@@ -35,6 +35,7 @@ all :
 
 install : $(pbases)
 	(cd ftpmirror; make install)
+	(cd indexfasta; make install)
 
 %.src : %.pl
 	mkdir -p $(dest)

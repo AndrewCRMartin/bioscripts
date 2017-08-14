@@ -1,6 +1,6 @@
 # This is where you want to install the Perl scripts
 dest=$(HOME)/scripts/bioscripts/ftpmirror
-# This is where you want to install the Perl scripts
+# This is where you want to install the documentation
 docdest=$(HOME)/scripts/bioscripts/docs
 # And this is where the executables live
 bin=$(HOME)/bin

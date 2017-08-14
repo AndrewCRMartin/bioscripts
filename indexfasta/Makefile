@@ -1,7 +1,23 @@
+# This is where you want to install the Perl scripts
+dest=$(HOME)/scripts/bioscripts/indexfasta
+# And this is where the executables live
+bin=$(HOME)/bin
+
+# The location of SwissProt
 updir=/acrm/data/swissprot/full
+# The location of your index files
 idxdir=/acrm/data/tmp
-indexfasta=./indexfasta.pl
-indexsprot=./indexswissprot.pl
+
+###############################################################
+#            Shouldn't need changes after this                #
+###############################################################
+
+# Current directory
+src=$(shell pwd)
+
+
+indexfasta=$(BIN)/indexfasta
+indexsprot=$(BIN)/indexswissprot
 
 # Get rid of all built-in SUFFIX rules
 .SUFFIXES : 
@@ -40,5 +56,27 @@ all : $(dtargets) $(ftargets)
 clean :
 	\rm -f $(idxdir)/*.datidx*
 	\rm -f $(idxdir)/*.faaidx*
+
+# Destination directories
+vpath %.src $(dest)
+vpath %.pl  $(src)
+vpath %     $(bin)
+
+# Perl
+psources := $(wildcard $(src)/*.pl)
+pstems   := $(notdir $(psources))       # Strip the path
+pbases   := $(basename $(pstems))       # Strip the extension
+pfiles   := $(addsuffix .src, $(pbases))
+
+
+install : $(pbases)
+
+%.src : %.pl
+	mkdir -p $(dest)
+	(cd $(dest); cp $(src)/$< $@)
+
+% : %.src
+	mkdir -p $(bin)
+	(cd $(bin); ln -sf $(dest)/$< $@)
 
 
