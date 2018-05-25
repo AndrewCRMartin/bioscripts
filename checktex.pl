@@ -4,7 +4,7 @@
 #   Program:    CheckTexRef
 #   File:       CheckTexRef.pl
 #   
-#   Version:    V1.0
+#   Version:    V1.1
 #   Date:       28.07.03
 #   Function:   Check \ref and \label in LaTeX file
 #   
@@ -45,6 +45,8 @@
 #
 #   Revision History:
 #   =================
+#   V1.0  28.07.03 Original
+#   V1.1  25.05.18 Escaped curly brackets in regexes
 #
 #*************************************************************************
 
@@ -167,13 +169,13 @@ while(<IN>)
     @words = split(/\\/);
     foreach $word (@words)
     {
-        if($word =~ /begin{(.*?)}/)
+        if($word =~ /begin\{(.*?)\}/)
         {
             $env = $1;
             push @envs, $env;
             push @starts, $line;
         }
-        if($word =~ /end{(.*?)}/)
+        if($word =~ /end\{(.*?)\}/)
         {
             $env = $1;
             $theenv = pop @envs;
