@@ -4,12 +4,12 @@
 #   Program:    csv2arff
 #   File:       csv2arff.pl
 #   
-#   Version:    V1.4
-#   Date:       05.10.15
+#   Version:    V1.5
+#   Date:       15.10.19
 #   Function:   Convert CSV file to ARFF format
 #   
-#   Copyright:  (c) Dr. Andrew C. R. Martin, UCL, 2012-2014
-#   Author:     Dr. Andrew C. R. Martin
+#   Copyright:  (c) Prof. Andrew C. R. Martin, UCL, 2012-2019
+#   Author:     Prof. Andrew C. R. Martin
 #   Address:    Institute of Structural and Molecular Biology
 #               Division of Biosciences
 #               University College
@@ -68,6 +68,7 @@
 #   V1.4   05.10.15  Added -skip to skip records with missing valued
 #                    - the default is now to substitute a ? for missing 
 #                    values
+#   V1.5   15.10.19  Added -over to allow oversampling
 #
 #*************************************************************************
 use strict;
@@ -101,6 +102,12 @@ if(!defined($::id) && (defined($::idfile) || defined($::iddiscard)))
 if(!defined($::limit) && (defined($::discard) || defined($::iddiscard)))
 {
     print STDERR "Error (csv2arff): You must specify -limit to use -discard or -iddiscard\n";
+    exit 1;
+}
+# 15.10.19 Added error check   By: ACRM
+if(!defined($::limit) && (defined($::over)))
+{
+    print STDERR "Error (csv2arff): You must specify -limit to use -over\n";
     exit 1;
 }
 
@@ -155,12 +162,15 @@ my ($ndata, %data) = ReadCSV();
 NormalizeData($ndata, $output, $outMinVal, $outMaxVal, %data);
 # Limit the maximum count of any output class (if -limit defined)
 @::rejectRecords = LimitData($ndata, $output, $::limit, %data);
+# If -limit and -over
+@::overSample = OversampleData($ndata, $output, $::limit, %data, $::over);
 # Create array of allowed output classes changing * to _other_
 @::allowedClasses = (defined($::class))?split(/\,/,$::class):();
 foreach my $ac (@::allowedClasses){$ac = "_other_" if ($ac eq "*");}
 
 # Write the results
 WriteARFF($output, $ndata, $::title, %data);
+WriteOverSampledARFF($output, $ndata, $::title, %data);
 
 # 29.11.12 Close the idfile file if we have one By: NSAN
 if(defined($::id) && defined($::idfile))
@@ -382,7 +392,7 @@ sub LimitData
             $reject[$i] = 1;
         }
 
-        # Step through the data, randomly marking for keeping if this is  
+        # Step through the data, randomly marking for keeping if this
         # class has too many items, or definitely for keeping if there
         # aren't enough.
         my %kept = ();
@@ -446,6 +456,8 @@ sub Random
     my($limit) = @_;
     return(int(rand($limit)));
 }
+
+
 #*************************************************************************
 sub FindRedundantFields
 {
@@ -740,7 +752,7 @@ sub FindAttribType
         }
         else
         {
-            foreach my $value (keys %values)
+            foreach my $value (sort keys %values)
             {
                 if($retString eq "")
                 {                
@@ -891,19 +903,202 @@ sub ReadInputFields
 }
 
 #*************************************************************************
+sub OversampleData
+{
+    my($ndata, $output, $limit, %data, $over) = @_;
+    my @overSample = ();
+
+    if(defined($::limit) && defined($::over))
+    {
+        my %classCounts = ();
+        # Count how many of each output class there is
+        for(my $i=0; $i<$ndata; $i++)
+        {
+            my $class = $data{$output}[$i];
+            if(defined($classCounts{$class}))
+            {
+                $classCounts{$class}++;
+            }
+            else
+            {
+                $classCounts{$class} = 0;
+            }
+        }
+
+        # Start off assuming we aren't using anything for oversampling
+        for (my $i=0; $i<$ndata; $i++)
+        {
+            $overSample[$i] = 0;
+        }
+
+        # Step through each class
+        foreach my $class (keys %classCounts)
+        {
+            my $kept       = $classCounts{$class};
+            my $count      = $classCounts{$class};
+
+            my $thisLimit  = $limit;
+            $thisLimit     = 2*$count if($limit > 2*$count);
+
+            my $resampling = ($kept < $thisLimit)?1:0;
+        
+            print STDERR "Oversampling dataset $class..." if(defined($::v) && $resampling);
+        
+            # While we don't have enough of this class
+            while($kept < $thisLimit)
+            {
+                # Run though the data looking for examples of this class
+                for(my $i=0; $i<$ndata; $i++)
+                {
+                    # See if it's the class of interest
+                    my $thisClass = $data{$output}[$i];
+                    if($thisClass eq $class)
+                    {
+                        # If it's not yet chosen for over-sampling
+                        if(!$overSample[$i])
+                        {
+                            # Based on random number we can choose to keep it
+                            my $rnum = Random($count);
+                            if($rnum < ($thisLimit-$count))
+                            {
+                                $overSample[$i] = 1;
+                                # Update the number kept - if it's now enough
+                                # jump out of the loop
+                                $kept++;
+                                if($kept >= $thisLimit)
+                                {
+                                    last;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            print STDERR "done\n" if(defined($::v) && $resampling);
+        }
+    }
+    
+    return(@overSample);
+}
+
+#*************************************************************************
+# 15.10.19 Original By: ACRM
+sub WriteOverSampledARFF
+{
+    my ($output, $nData, $title, %data) = @_;
+
+    my @attributes = ();
+    my @isBoolean  = ();
+
+    if(defined($::limit) && defined($::over))
+    {
+        print STDERR "Writing oversampled data to ARFF file..." if(defined($::v));
+
+        # Determine output attribute type
+        my ($attribType, $boolean) = FindAttribType(1, @{$data{$output}});
+        my $outIsBoolean = $boolean;
+        
+        for(my $i=0; $i<$nData; $i++)
+        {
+            if($::overSample[$i])
+            {
+                my $outputString = "";
+                my $valid  = 1;
+                
+                # Input attributes
+                my $attribCount = 0;
+                foreach my $attrib (@attributes)
+                {
+                    my $datum = $data{$attrib}[$i];
+                    
+                    if($datum eq "")    # Check the line is complete
+                    {
+                        if(defined($::skip))
+                        {
+                            $valid = 0;
+                            last;
+                        }
+                        else
+                        {
+                            $datum = '?';
+                        }
+                    }
+                    else
+                    {   # Convert to Boolean if needed
+                        if(!defined($::ni) && $isBoolean[$attribCount])
+                        {
+                            $datum = (($datum == 1)?"TRUE":"FALSE");
+                        }
+                    }
+                    
+                    # Append to the output string
+                    $outputString .= $datum . ",";
+                    $attribCount++;
+                }
+                
+                # Output value
+                my $datum = $data{$output}[$i];
+                if(int(@::allowedClasses))
+                {
+                    if(!inArray($datum, @::allowedClasses))
+                    {
+                        if(inArray("_other_", @::allowedClasses))
+                        {
+                            $datum = "_other_";
+                        }
+                        else
+                        {
+                            $valid = 0;
+                        }
+                    }
+                }
+                
+                # If this is an allowed attribute (or we weren't checking)
+                if($valid)
+                {
+                    if($datum eq "")
+                    {
+                        $valid = 0;
+                    }
+                    else
+                    {
+                        # Convert to Boolean if needed
+                        if(!defined($::no) && $outIsBoolean)
+                        {
+                            $datum = (($datum == 1)?"TRUE":"FALSE");
+                        }
+                        # Append to the output string
+                        $outputString .= $datum . "\n";
+                    }
+                }
+                
+                # Print results if valid
+                if($valid)
+                {
+                    PrintLine(1, $outputString);
+                    PrintLineId(1,  $data{$::id}[$i].",".$outputString);
+                }
+            }
+        }
+        print STDERR "done\n" if(defined($::v));
+    }
+}
+
+#*************************************************************************
 sub UsageDie
 {
     print <<__EOF;
 
-csv2arff V1.4 (c) 2012-2015, UCL, Dr. Andrew C.R. Martin, Nouf S. Al-Numair
+csv2arff V1.5 (c) 2012-2019, UCL, Dr. Andrew C.R. Martin, Nouf S. Al-Numair
 
 Usage: csv2arff [-ni][-no][-auto][-skip]
                 [-norm[=file][-relax][-minus][-write=file]]
                 [-title=title][-class=a,b,c] 
                 [-id=a [-idfile=file]]
                 [-id=a [-iddiscard=file]]
-                [-limit=n [-discard=file] [-id=a [-idfile=file]]]
-                [-limit=n [-discard=file] [-id=a [-iddiscard=file]]]
+                [-limit=n [-over] [-discard=file] [-id=a [-idfile=file]]]
+                [-limit=n [-over] [-discard=file] [-id=a [-iddiscard=file]]]
                 (-inputs=a,b,c|inputs.dat) output [file.csv] > file.arff
 
 REQUIRED PARAMETERS
@@ -949,6 +1144,11 @@ OPTIONS
    Record selection
        -limit=n        - randomly limit the number of records of any
                          output class to n
+       -over           - used with -limit to allow over-sampling - if -limit
+                         is greater than the number in a class, this class
+                         will be resampled to create -limit entries. Note
+                         that over-sampling will only ever resample each 
+                         item once, so you cannot more than double a dataset
        -class=a,b,c    - specify allowed output classes (class * will match
                          unspecified classes). Classes that do not match
                          will be discarded.
@@ -980,11 +1180,15 @@ with -ni and for the output with -no
 The -auto option automatically removes redundant, non-informative input
 attributes (i.e. those where all values are the same)
 
-The -limit=n option is used when the data are highly skewed towards certain
-classes. If specified, no class will contain more than n values. Selection
-is made randomly so will be different on each run. Note that normalization
-(see -norm) is performed before limiting the dataset, so multiple datasets
-generated with -limit will have been normlaized in the same way.
+The -limit=n option is used when the data are highly skewed towards
+certain classes. If specified, no class will contain more than n
+values. Selection is made randomly so will be different on each
+run. With -over, the value set by -limit=n may be larger than a
+dataset size and will lead to resampling of the dataset. This will
+never resample items more than once so you cannot more-than-double the
+dataset size. Note that normalization (see -norm) is performed before
+limiting the dataset, so multiple datasets generated with -limit will
+have been normalized in the same way.
 
 The -norm option normalizes all numeric fields to have the range 0...1
 (or -1...1 if -minus is specified).  Some machine learning methods
@@ -1025,3 +1229,5 @@ __EOF
 
     exit 0;
 }
+
+
