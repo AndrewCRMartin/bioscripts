@@ -566,7 +566,7 @@ sub WriteARFF
         {
             my $datum = $data{$attrib}[$i];
             
-            if($datum eq "")    # Check the line is complete
+            if(($datum eq "")||($datum eq '?')) # Check the line is complete
             {
                 if(defined($::skip))
                 {
@@ -714,7 +714,11 @@ sub FindAttribType
     # Store the observed values in a hash
     foreach my $datum (@data)
     {
-        $values{$datum} = 1;
+        if((($datum ne '') && ($datum ne '?')) ||
+           !defined($::skip))
+        {
+            $values{$datum} = 1;
+        }
     }
 
     # See if any of the observed values is non-numeric
