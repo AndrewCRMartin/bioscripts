@@ -4,8 +4,8 @@
 #   Program:    csv2arff
 #   File:       csv2arff.pl
 #   
-#   Version:    V1.5
-#   Date:       15.10.19
+#   Version:    V1.6
+#   Date:       16.10.19
 #   Function:   Convert CSV file to ARFF format
 #   
 #   Copyright:  (c) Prof. Andrew C. R. Martin, UCL, 2012-2019
@@ -69,6 +69,7 @@
 #                    - the default is now to substitute a ? for missing 
 #                    values
 #   V1.5   15.10.19  Added -over to allow oversampling
+#   V1.6   16.10.19  Fixed problem with generating headers with -skip
 #
 #*************************************************************************
 use strict;
