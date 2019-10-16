@@ -1021,7 +1021,10 @@ sub WriteOverSampledARFF
                         }
                         else
                         {
-                            $datum = '?';
+                            # Don't allow missing values in over-sampled data
+                            $valid = 0;
+                            last;
+                            # $datum = '?';
                         }
                     }
                     else
