@@ -70,6 +70,7 @@
 #                    values
 #   V1.5   15.10.19  Added -over to allow oversampling
 #   V1.6   16.10.19  Fixed problem with generating headers with -skip
+#                    Fixed output on oversampling
 #
 #*************************************************************************
 use strict;
@@ -383,7 +384,7 @@ sub LimitData
             }
             else
             {
-                $classCounts{$class} = 0;
+                $classCounts{$class}=1;
             }
         }
 
@@ -609,7 +610,7 @@ sub WriteARFF
             }
         }
 
-        # If this is an allowed attribute (or we weren't checking)
+        # If this is an allowed output attribute (or we weren't checking)
         if($valid)
         {
             if($datum eq "")
@@ -926,7 +927,7 @@ sub OversampleData
             }
             else
             {
-                $classCounts{$class} = 0;
+                $classCounts{$class}=1;
             }
         }
 
@@ -963,7 +964,8 @@ sub OversampleData
                         if(!$overSample[$i])
                         {
                             # Based on random number we can choose to keep it
-                            my $rnum = Random($count);
+#                            my $rnum = Random($count);
+                            my $rnum = Random($thisLimit);
                             if($rnum < ($thisLimit-$count))
                             {
                                 $overSample[$i] = 1;
@@ -1000,10 +1002,21 @@ sub WriteOverSampledARFF
     {
         print STDERR "Writing oversampled data to ARFF file..." if(defined($::v));
 
+        # Find valid input attributes
+        foreach my $key (sort keys %data)
+        {
+            if(inArray($key, @::inputFields) && !defined($::redundantFields{$key}))
+            {
+                my ($attribType, $boolean) = FindAttribType(0, @{$data{$key}});
+                push @attributes, $key;
+                push @isBoolean,  $boolean;
+            }
+        }
+        
         # Determine output attribute type
         my ($attribType, $boolean) = FindAttribType(1, @{$data{$output}});
         my $outIsBoolean = $boolean;
-        
+
         for(my $i=0; $i<$nData; $i++)
         {
             if($::overSample[$i])
@@ -1017,7 +1030,7 @@ sub WriteOverSampledARFF
                 {
                     my $datum = $data{$attrib}[$i];
                     
-                    if($datum eq "")    # Check the line is complete
+                    if(($datum eq '')||($datum eq '?'))  # Check the line is complete
                     {
                         if(defined($::skip))
                         {
@@ -1062,7 +1075,7 @@ sub WriteOverSampledARFF
                     }
                 }
                 
-                # If this is an allowed attribute (or we weren't checking)
+                # If this is an allowed output attribute (or we weren't checking)
                 if($valid)
                 {
                     if($datum eq "")
@@ -1098,7 +1111,7 @@ sub UsageDie
 {
     print <<__EOF;
 
-csv2arff V1.5 (c) 2012-2019, UCL, Dr. Andrew C.R. Martin, Nouf S. Al-Numair
+csv2arff V1.6 (c) 2012-2019, UCL, Dr. Andrew C.R. Martin, Nouf S. Al-Numair
 
 Usage: csv2arff [-ni][-no][-auto][-skip]
                 [-norm[=file][-relax][-minus][-write=file]]
