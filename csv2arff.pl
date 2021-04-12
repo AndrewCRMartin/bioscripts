@@ -72,7 +72,7 @@
 #   V1.6   16.10.19  Fixed problem with generating headers with -skip
 #                    Fixed output on oversampling
 #   V1.7   12.04.21  Input file reader removes return characters for
-#                    reading Mac files
+#                    reading Windows files
 #
 #*************************************************************************
 use strict;
@@ -884,7 +884,7 @@ sub ReadCSV
 }
 
 #*************************************************************************
-# 12.04.21 Remove return characters for Mac files
+# 12.04.21 Remove return characters for Windows files
 sub ReadInputFields
 {
     my($input) = @_;
