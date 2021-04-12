@@ -4,11 +4,11 @@
 #   Program:    csv2arff
 #   File:       csv2arff.pl
 #   
-#   Version:    V1.6
-#   Date:       16.10.19
+#   Version:    V1.7
+#   Date:       12.04.21
 #   Function:   Convert CSV file to ARFF format
 #   
-#   Copyright:  (c) Prof. Andrew C. R. Martin, UCL, 2012-2019
+#   Copyright:  (c) Prof. Andrew C. R. Martin, UCL, 2012-2021
 #   Author:     Prof. Andrew C. R. Martin
 #   Address:    Institute of Structural and Molecular Biology
 #               Division of Biosciences
@@ -71,6 +71,8 @@
 #   V1.5   15.10.19  Added -over to allow oversampling
 #   V1.6   16.10.19  Fixed problem with generating headers with -skip
 #                    Fixed output on oversampling
+#   V1.7   12.04.21  Input file reader removes return characters for
+#                    reading Mac files
 #
 #*************************************************************************
 use strict;
@@ -882,6 +884,7 @@ sub ReadCSV
 }
 
 #*************************************************************************
+# 12.04.21 Remove return characters for Mac files
 sub ReadInputFields
 {
     my($input) = @_;
@@ -893,6 +896,7 @@ sub ReadInputFields
         {
             chomp;
             s/^\s+//;
+            s/\r//;
             if(length)
             {
                 push @fields, $_;
@@ -1111,7 +1115,7 @@ sub UsageDie
 {
     print <<__EOF;
 
-csv2arff V1.6 (c) 2012-2019, UCL, Dr. Andrew C.R. Martin, Nouf S. Al-Numair
+csv2arff V1.7 (c) 2012-2021, UCL, Prof. Andrew C.R. Martin, Nouf S. Al-Numair
 
 Usage: csv2arff [-ni][-no][-auto][-skip]
                 [-norm[=file][-relax][-minus][-write=file]]
