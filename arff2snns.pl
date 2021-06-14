@@ -87,43 +87,39 @@ while(<>)
         {
             if(/\?/)
             {
-                printf STDERR "\nLine containing underfined values skipped\n";
+                printf STDERR "\nLine containing undefined values skipped\n";
                 printf STDERR "   $_\n";
             }
             else
             {
-                s/FALSE/0/g;
-                s/TRUE/1/g;
-                s/\,/ /g;
-                push @data, "$_";
+                my $dataLine = ConvertLine($_);
+                push @data, "$dataLine";
             }
         }
     }
 }
 
-my @fields = split(/\s+/, @data[0]);
+PrintSNNSHeader(\@data);
+PrintData(\@data);
 
-print "SNNS pattern definition file V3.2\n";
-print "generated at Wed Oct 14 11:46:48 2009\n";
-print "\n";
-print "\n";
-print "\n";
-printf("No. of patterns : %d\n", scalar(@data));
-printf("No. of input units : %d\n", scalar(@fields) - 1);
-print "No. of output units : 1\n";
-print "\n";
 
-my $count = 1;
-foreach my $datum (@data)
+#*************************************************************************
+sub PrintData
 {
-    my @fields = split(/\s+/,$datum);
-    my $out    = pop(@fields);
+    my($aData) = @_;
     
-    print "# Input line $count\n";
-    print "@fields\n";
-    print "# output line $count\n";
-    print "$out\n";
-    $count++;
+    my $count = 1;
+    foreach my $datum (@$aData)
+    {
+        my @fields = split(/\s+/,$datum);
+        my $out    = pop(@fields);
+        
+        print "# Input line $count\n";
+        print "@fields\n";
+        print "# Output\n";
+        print "$out\n";
+        $count++;
+    }
 }
 
 
@@ -142,4 +138,64 @@ sub BadAttributes
     return(1) if(length($field));
 
     return(0);
+}
+
+
+#*************************************************************************
+sub ConvertLine
+{
+    my($line) = @_;
+    $line =~ s/FALSE/0/g;
+    $line =~ s/TRUE/1/g;
+    $line =~ s/\,/ /g;
+
+    return($line);
+}
+
+
+#*************************************************************************
+sub PrintSNNSHeader
+{
+    my($aData) = @_;
+
+    my @months = qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec);
+    my @days   = qw(Sun Mon Tue Wed Thu Fri Sat Sun);
+    
+    my $dateString = localtime();
+    my @fields = split(/\s+/, @$aData[0]);
+
+    print "SNNS pattern definition file V3.2\n";
+    print "generated at $dateString\n";
+    print "\n";
+    print "\n";
+    print "\n";
+    printf("No. of patterns : %d\n", scalar(@$aData));
+    printf("No. of input units : %d\n", scalar(@fields) - 1);
+    print "No. of output units : 1\n";
+    print "\n";
+}
+
+
+#*************************************************************************
+sub UsageDie
+{
+    print <<__EOF;
+
+arff2snns V1.0 (c) UCL, Prof. Andrew C.R. Martin
+
+  Usage: arff2snns [input.arff] > snns.pat
+
+This is a very simple program to convert Weka ARFF files to SNNS .pat 
+pattern files. If no input file is specified, it reads from standard
+input.
+
+Limitations:
+ - It can only handle numeric and Boolean attributes (including for 
+   outputs)
+ - It can only handle a single output which must be the last field in the
+   .arff file
+
+__EOF
+
+    exit 0;
 }
