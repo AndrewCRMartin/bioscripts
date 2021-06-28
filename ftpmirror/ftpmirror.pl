@@ -4,13 +4,13 @@
 #   Program:    ftpmirror
 #   File:       ftpmirror.pl
 #   
-#   Version:    V1.6
-#   Date:       10.02.16
+#   Version:    V1.7
+#   Date:       28.06.21
 #   Function:   Mirror an FTP site dealing with compressing and 
 #               uncompressing if needed
 #   
-#   Copyright:  (c) Dr. Andrew C. R. Martin 2010-2016
-#   Author:     Dr. Andrew C. R. Martin
+#   Copyright:  (c) Prof. Andrew C. R. Martin 2010-2021
+#   Author:     Prof. Andrew C. R. Martin
 #   EMail:      andrew@bioinf.org.uk
 #               
 #*************************************************************************
@@ -79,6 +79,7 @@
 #   V1.6   10.02.16   Fixed problems with using LWP::Simple
 #                     Now deals with symbolic links in FTP directories
 #                     with LWP::Simple
+#   V1.7   28.06.21   Now only uses mirror() if the file exists already
 #
 #*************************************************************************
 use strict;
@@ -219,6 +220,7 @@ sub HandleRequest
 
             if(defined($::debug))
             {
+                print "Parsed and removed $tfile\n";
                 print "Found $nfiles remote files and $ndirs remote directories\n";
             }
 
@@ -267,6 +269,10 @@ sub HandleRequest
                 # 04.11.10
                 if(($exclregex eq "") || (!($fullurl =~ /$exclregex/))) 
                 {
+                    if(!defined($::quiet))
+                    {
+                        print "Getting $fullurl...";
+                    }
                     # Grabs a file and handles compression as required
                     MirrorCompressFile($fullurl, $destination, 
                                        $filename, $compress);
@@ -274,6 +280,10 @@ sub HandleRequest
                     {
                         print "exited after 10 files\n";
                         last;
+                    }
+                    if(defined($::quiet))
+                    {
+                        print "done\n";
                     }
                 }
                 else
@@ -514,13 +524,6 @@ sub MirrorCompressFile
 {
     my($url, $dirname, $filename, $compress) = @_;
 
-    # Grab the meta-data header from the remote file to get the timestamp
-    # [0] text/ftp-dir-listing | text/xml-external-parsed-entity
-    # [1] size
-    # [2] age
-    my @headvals = head($url);
-    my $remotetime = $headvals[2];
-
     # Construct the complete filename
     my $fullfile = BuildName($dirname,$filename,0);
 
@@ -544,6 +547,13 @@ sub MirrorCompressFile
     # version if it is newer.
     if(-e $fullfinalfile)
     {
+        # Grab the meta-data header from the remote file to get the timestamp
+        # [0] text/ftp-dir-listing | text/xml-external-parsed-entity
+        # [1] size
+        # [2] age
+        my @headvals = head($url);
+        my $remotetime = $headvals[2];
+        # and for the local file
         my @stats = stat($fullfinalfile);
         my $mtime = $stats[9];
 
@@ -561,8 +571,7 @@ sub MirrorCompressFile
     }
     else                        # Doesn't exist, just grab it
     {
-        print "Getting $url\n" if(!defined($::quiet));
-        mirror($url, BuildName($dirname,$filename,0));
+        getstore($url, BuildName($dirname,$filename,0));
         DoCompression($dirname, $filename, $compress);
     }
 }
@@ -860,11 +869,12 @@ sub TryUse
 # 28.03.14  V1.3
 # 19.05.14  V1.4
 # 05.11.14  V1.5
+# 28.06.21  V1.7
 sub Usage
 {
     print <<__EOF;
 
-ftpmirror V1.5 (c) 2010-2014, Dr. Andrew C.R Martin
+ftpmirror V1.7 (c) 2010-2021, Prof. Andrew C.R Martin
 
 Usage: ftpmirror [-debug[=n]] [-quiet] [-verbose] [-forcedelete] config_file
        -debug       Turn on debugging information
