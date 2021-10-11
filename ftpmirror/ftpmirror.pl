@@ -580,7 +580,7 @@ sub MirrorCompressFile
         }
 	else
 	{
-            print "Already got $url\n" if(!defined($::quiet));
+            print "\n   Already got $url\n" if(!defined($::quiet));
 	}
     }
     else                        # Doesn't exist, just grab it
