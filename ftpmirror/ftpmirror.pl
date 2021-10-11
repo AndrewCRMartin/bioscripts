@@ -4,8 +4,8 @@
 #   Program:    ftpmirror
 #   File:       ftpmirror.pl
 #   
-#   Version:    V1.7
-#   Date:       28.06.21
+#   Version:    V1.8
+#   Date:       07.10.21
 #   Function:   Mirror an FTP site dealing with compressing and 
 #               uncompressing if needed
 #   
@@ -80,6 +80,8 @@
 #                     Now deals with symbolic links in FTP directories
 #                     with LWP::Simple
 #   V1.7   28.06.21   Now only uses mirror() if the file exists already
+#   V1.8   07.10.21   Now uses wget for everything if that option is
+#                     given rather than just for the file list
 #
 #*************************************************************************
 use strict;
@@ -106,6 +108,8 @@ if(defined($::h))
     Usage();
     exit 0;
 }
+
+$|=1; # Turn on auto-flushing
 
 # Read the config file
 while(<>)
@@ -194,7 +198,7 @@ sub HandleRequest
             }
         }
         CreateDirIfNeeded($dirname);
-        MirrorCompressFile($url, $dirname, $filename, $compress);
+        MirrorCompressFile($url, $dirname, $filename, $compress, $wget, $retry);
     }
     else                        # It's a directory
     {
@@ -216,11 +220,12 @@ sub HandleRequest
             `wget $options --output-document=$tfile --tries=$retry --waitretry=60 $url`;
             # ...and extract list of files and directories it contains
             ($nfiles, $ndirs) = ParseWgetFile($tfile, \@files, \@dirs);
-            unlink $tfile;
+            unlink $tfile if($::debug < 4);
 
             if(defined($::debug))
             {
-                print "Parsed and removed $tfile\n";
+                print "Parsed $tfile\n";
+                printf "%s $tfile\n", (defined($::debug) && ($::debug < 4))?"Removed":"Retained";
                 print "Found $nfiles remote files and $ndirs remote directories\n";
             }
 
@@ -275,13 +280,13 @@ sub HandleRequest
                     }
                     # Grabs a file and handles compression as required
                     MirrorCompressFile($fullurl, $destination, 
-                                       $filename, $compress);
+                                       $filename, $compress, $wget, $retry);
                     if(($::debug > 1) && ($count++ > 10))
                     {
                         print "exited after 10 files\n";
                         last;
                     }
-                    if(defined($::quiet))
+                    if(!defined($::quiet))
                     {
                         print "done\n";
                     }
@@ -520,9 +525,11 @@ sub ParseRemoteDir
 # compression if required
 #
 # 19.08.10  Original   By: ACRM
+# 07.10.21  Added wget and retry parameters. Now uses wget if that
+#           option is specified
 sub MirrorCompressFile
 {
-    my($url, $dirname, $filename, $compress) = @_;
+    my($url, $dirname, $filename, $compress, $wget, $retry) = @_;
 
     # Construct the complete filename
     my $fullfile = BuildName($dirname,$filename,0);
@@ -561,7 +568,14 @@ sub MirrorCompressFile
         if($remotetime > $mtime)
         {
             print "Updating $url\n" if(!defined($::quiet));
-            mirror($url, BuildName($dirname,$filename,0));
+            if($wget)
+            {
+                `(cd $dirname; wget --quiet --timestamping --tries=$retry --waitretry=60 $url)`;
+            }
+            else
+            {
+                mirror($url, BuildName($dirname,$filename,0));
+            }
             DoCompression($dirname, $filename, $compress);
         }
 	else
@@ -571,7 +585,14 @@ sub MirrorCompressFile
     }
     else                        # Doesn't exist, just grab it
     {
-        getstore($url, BuildName($dirname,$filename,0));
+        if($wget)
+        {
+            `(cd $dirname; wget --quiet --timestamping --tries=$retry --waitretry=60 $url)`;
+        }
+        else
+        {
+            getstore($url, BuildName($dirname,$filename,0));
+        }
         DoCompression($dirname, $filename, $compress);
     }
 }
@@ -870,11 +891,12 @@ sub TryUse
 # 19.05.14  V1.4
 # 05.11.14  V1.5
 # 28.06.21  V1.7
+# 07.10.21  V1.8
 sub Usage
 {
     print <<__EOF;
 
-ftpmirror V1.7 (c) 2010-2021, Prof. Andrew C.R Martin
+ftpmirror V1.8 (c) 2010-2021, Prof. Andrew C.R Martin
 
 Usage: ftpmirror [-debug[=n]] [-quiet] [-verbose] [-forcedelete] config_file
        -debug       Turn on debugging information
@@ -883,6 +905,8 @@ Usage: ftpmirror [-debug[=n]] [-quiet] [-verbose] [-forcedelete] config_file
                     Setting to -debug=3 turns on additional information
                     about remote files which controls cleaning of local files
                     that have gone away
+                    Setting to -debug=4 also keeps the initial directory 
+                    listing file
        -quiet       Prints no information about files being downloaded
                     or removed
        -verbose     Print the names of files skipped through not matching
