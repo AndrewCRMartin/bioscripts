@@ -4,8 +4,8 @@
 #   Program:    ftpmirror
 #   File:       ftpmirror.pl
 #   
-#   Version:    V1.8
-#   Date:       07.10.21
+#   Version:    V1.9
+#   Date:       07.12.21
 #   Function:   Mirror an FTP site dealing with compressing and 
 #               uncompressing if needed
 #   
@@ -82,6 +82,9 @@
 #   V1.7   28.06.21   Now only uses mirror() if the file exists already
 #   V1.8   07.10.21   Now uses wget for everything if that option is
 #                     given rather than just for the file list
+#   V1.8.1 01.11.21   Skips anything containing .. in the path
+#   V1.9   07.12.21   Some fixes for http directories where there may
+#                     be link text that is actually an image
 #
 #*************************************************************************
 use strict;
@@ -176,6 +179,7 @@ while(<>)
 # 19.05.14  Added $forcedelete parameter
 # 10.02.16  Added parentheses on LWP::Simple get() call
 #           Added handling of links
+# 07.12.21  Checks for directory name of ..
 sub HandleRequest
 {
     my($url, $destination, $recurse, $compress, $fileonly, $wget, 
@@ -341,13 +345,18 @@ sub HandleRequest
         {
             foreach my $dir (@dirs)
             {
-                HandleRequest(BuildName($url,$dir,1), 
-                              BuildName($destination,$dir,0), 
-                              1, # Recurse
-                              $compress, 
-                              0, # Fileonly
-                              $wget, $retry, $noclean, $fast, 
-                              $regex, $exclregex, $forcedelete);
+                # 01.11.21 don't look at directories with /.. in them!
+                # 07.12.21 or just set ti ..
+                if(!($dir =~ /\/\.\./) && ($dir ne '..'))
+                {
+                    HandleRequest(BuildName($url,$dir,1), 
+                                  BuildName($destination,$dir,0), 
+                                  1, # Recurse
+                                  $compress, 
+                                  0, # Fileonly
+                                  $wget, $retry, $noclean, $fast, 
+                                  $regex, $exclregex, $forcedelete);
+                }
             }
         }
     }
@@ -414,7 +423,7 @@ sub CleanDirectory
         if(($nRemoteFilesAndDirs < ($nLocalFilesAndDirs / 2)) &&
            !$forcedelete)
         {
-            print "Remote directory has shrunk be > 50%, not deleting files\n";
+            print "Remote directory has shrunk by > 50%, not deleting files\n";
             print "   Use FORCEDELETE or -forcedelete option to override\n";
             return;
         }
@@ -422,62 +431,65 @@ sub CleanDirectory
         foreach my $file (@files)
         {
             my $filename = BuildName($destination, $file, 0);
-            if( -d $filename )  # It's a directory so check the dir hash
+            if(!($filename =~ /\/\.\.\//)) # Skip names containing /../
             {
-                if(!defined($dirHash{$file}))
+                if( -d $filename )  # It's a directory so check the dir hash
                 {
-                    if($noclean)
+                    if(!defined($dirHash{$file}))
                     {
-                        if(!defined($::quiet))
+                        if($noclean)
                         {
-                            print "Directory should be removed: $filename\n";
+                            if(!defined($::quiet))
+                            {
+                                print "Directory should be removed: $filename\n";
+                            }
                         }
-                    }
-                    else
-                    {
-                        if(!defined($::quiet))
+                        else
                         {
-                            print "Removing directory: $filename\n";
+                            if(!defined($::quiet))
+                            {
+                                print "Removing directory: $filename\n";
+                            }
+                            `\rm -rf $filename`;
                         }
-                        `\rm -rf $filename`;
                     }
                 }
-            }
-            else                # It's a file so check the file hash
-            {
-                # If we are using compression we have to change the file 
-                # name
-                if($compress == 1)
+                else                # It's a file so check the file hash
                 {
-                    # We have saved it compressed while original was not 
+                    # If we are using compression we have to change the file 
+                    # name
+                    if($compress == 1)
+                    {
+                        # We have saved it compressed while original was not 
                     # so we remove the .gz extension from the filename 
-                    # we have
-                    $file =~ s/\.gz$//;
-                }
-                elsif($compress == (-1))
-                {
-                    # We have saved it uncompressed while original was 
-                    # compressed so we add the .gz extension to the 
-                    # filename we have
-                    $file .= ".gz";
-                }
-
-                if(!defined($fileHash{$file}))
-                {
-                    if($noclean)
-                    {
-                        if(!defined($::quiet))
-                        {
-                            print "File should be removed: $filename\n";
-                        }
+                        # we have
+                        $file =~ s/\.gz$//;
                     }
-                    else
+                    elsif($compress == (-1))
                     {
-                        if(!defined($::quiet))
+                        # We have saved it uncompressed while original was 
+                        # compressed so we add the .gz extension to the 
+                        # filename we have
+                        $file .= ".gz";
+                    }
+                    
+                    if(!defined($fileHash{$file}))
+                    {
+                        if($noclean)
                         {
-                            print "Removing file: $filename\n";
+                            if(!defined($::quiet))
+                            {
+                                print "File should be removed: $filename\n";
+                            }
                         }
-                        unlink $filename;
+                        else
+                        {
+                            if(!defined($::quiet))
+                            {
+                                print "Removing file: $filename\n";
+                            }
+                            unlink $filename;
+                        }
                     }
                 }
             }
@@ -772,6 +784,8 @@ sub ParseConfigLine
 #
 # 19.08.10  Original   By: ACRM
 # 28.03.14  Added check on count of files and directories and return these
+# 07.12.21  Takes name from href since there may be images in the link
+#           when using http access
 sub ParseWgetFile
 {
     my($filename, $pFiles, $pDirs) = @_;
@@ -779,16 +793,22 @@ sub ParseWgetFile
     open(FILE, $filename) || die "Can't read $filename";
     while(<FILE>)
     {
-        if(/<a href=".*?">(.*?)<\/a>/)
+        if(/<a href="(.*?)">(.*?)<\/a>/)
         {
-            my $file = $1;
+            my $file     = $1;
+            my $filename = $2;
             if($file =~ /\/$/)  # Ends with a / so is a directory
             {
+                # Remove the trailing slash
                 $file =~ s/\/$//;
+                # Remove the preceding path
+                $file =~ s/^.*\///;
                 push @$pDirs, $file;
             }
             else                # Otherwise it's a file
             {
+                # Remove the preceding path
+                $file =~ s/^.*\///;
                 push @$pFiles, $file;
             }
         }
@@ -892,11 +912,13 @@ sub TryUse
 # 05.11.14  V1.5
 # 28.06.21  V1.7
 # 07.10.21  V1.8
+# 01.11.21  V1.8.1
+# 07.12.21  V1.9
 sub Usage
 {
     print <<__EOF;
 
-ftpmirror V1.8 (c) 2010-2021, Prof. Andrew C.R Martin
+ftpmirror V1.9 (c) 2010-2021, Prof. Andrew C.R Martin
 
 Usage: ftpmirror [-debug[=n]] [-quiet] [-verbose] [-forcedelete] config_file
        -debug       Turn on debugging information
