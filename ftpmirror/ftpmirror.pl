@@ -793,7 +793,7 @@ sub ParseWgetFile
     open(FILE, $filename) || die "Can't read $filename";
     while(<FILE>)
     {
-        if(/<a href="(.*?)">(.*?)<\/a>/)
+        if(/^\s*<a href="(.*?)">(.*?)<\/a>/)
         {
             my $file     = $1;
             my $filename = $2;
