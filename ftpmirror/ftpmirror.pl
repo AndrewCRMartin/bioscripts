@@ -4,12 +4,12 @@
 #   Program:    ftpmirror
 #   File:       ftpmirror.pl
 #   
-#   Version:    V1.9
-#   Date:       07.12.21
+#   Version:    V1.10
+#   Date:       16.01.24
 #   Function:   Mirror an FTP site dealing with compressing and 
 #               uncompressing if needed
 #   
-#   Copyright:  (c) Prof. Andrew C. R. Martin 2010-2021
+#   Copyright:  (c) Prof. Andrew C. R. Martin 2010-2024
 #   Author:     Prof. Andrew C. R. Martin
 #   EMail:      andrew@bioinf.org.uk
 #               
@@ -85,6 +85,8 @@
 #   V1.8.1 01.11.21   Skips anything containing .. in the path
 #   V1.9   07.12.21   Some fixes for http directories where there may
 #                     be link text that is actually an image
+#   V1.10  16.01.24   More fixes for http access to ftp sites where the
+#                     index appears in a table.
 #
 #*************************************************************************
 use strict;
@@ -786,6 +788,7 @@ sub ParseConfigLine
 # 28.03.14  Added check on count of files and directories and return these
 # 07.12.21  Takes name from href since there may be images in the link
 #           when using http access
+# 16.01.24  Added alternative regex for tabular listing of FTP sites
 sub ParseWgetFile
 {
     my($filename, $pFiles, $pDirs) = @_;
@@ -793,7 +796,8 @@ sub ParseWgetFile
     open(FILE, $filename) || die "Can't read $filename";
     while(<FILE>)
     {
-        if(/^\s*<a href="(.*?)">(.*?)<\/a>/)
+        if((/^\s*<a href="(.*?)">(.*?)<\/a>/) ||
+           (/^\s*<tr>.*<a href="(.*?)">(.*?)<\/a>/))
         {
             my $file     = $1;
             my $filename = $2;
