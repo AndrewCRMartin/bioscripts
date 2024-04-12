@@ -1,8 +1,8 @@
 #!/usr/bin/perl -s
 #*************************************************************************
 #
-#   Program:    indexsecpri
-#   File:       indexsecpro.pl
+#   Program:    indexsec2pri
+#   File:       indexsec2pri.pl
 #   
 #   Version:    V1.0
 #   Date:       12.04.24
@@ -56,6 +56,7 @@ $indexfile = shift(@ARGV);
 
 open(FILE,$fname) || die "Cannot open seq file $fname";
 dbmopen %sec_pri, $indexfile, 0666 || die "Can't dbopen $indexfile";
+$|=1;
 
 while(<FILE>)
 {
@@ -66,6 +67,7 @@ while(<FILE>)
     elsif(/^AC\s+(.*)/)
     {
         $ac .= " " . $1;
+        print "." if(!(++$count % 100));
     }
     elsif(/^\/\//)
     {
@@ -75,15 +77,18 @@ while(<FILE>)
         
         foreach $ac (@acs)
         {
-            if(defined($sec_pri{$ac}) && !defined($::q))
+            if(defined($sec_pri{$ac}))
             {
-                print "Warning: AC $ac found multiple times\n";
+                $sec_pri{$ac} .= " $priAC";
             }
-            $sec_pri{$ac} = $priAC;
-            $count++;
+            else
+            {
+                $sec_pri{$ac} = $priAC;
+            }
         }
     }
 }
+print "\nIndex complete\n";
 
 dbmclose %sec_pri;
 close(FILE);
@@ -105,7 +110,6 @@ indexsecpri V1.0 (c) 2014 Prof. Andrew C.R. Martin,
 
 Usage: indexsecpri [-h] [-q] infile.dat indexfile.idx
        -h              this help message
-       -q              Quiet - does not report multiple entries
        infile.dat      A SwissProt .dat file 
        indexfile.idx   A DBM hash index file
 

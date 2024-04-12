@@ -97,7 +97,7 @@ sub UsageDie
 sec2pri V1.0 (c) 2024, Prof. Andrew C.R. Martin
 
 Usage: sec2pri     index_file sprot_code [sprot_code...]
-       index_file  Index created by indexfasta
+       index_file  Index created by indexsec2pri
        sprot_code  SwissProt AC
 
 Extracts one or more primary accessions from a secondary (or primary)
