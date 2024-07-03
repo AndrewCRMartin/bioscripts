@@ -1,20 +1,15 @@
 #!/usr/bin/perl -s
 #*************************************************************************
 #
-#   Program:    CheckTexRef
-#   File:       CheckTexRef.pl
+#   Program:    checktex
+#   File:       checktex.pl
 #   
-#   Version:    V1.1
-#   Date:       28.07.03
+#   Version:    V1.2
+#   Date:       03.07.24
 #   Function:   Check \ref and \label in LaTeX file
 #   
-#   Copyright:  (c) Univ. Reading and Dr. Andrew C.R. Martin, 2003
-#   Author:     Dr. Andrew C. R. Martin
-#   Address:    School of Animal and Microbial Sciences
-#               The University of Reading
-#               Whiteknights
-#               PO Box 228, Reading
-#               RG6 6AJ
+#   Copyright:  (c) Univ. Reading and Prof. Andrew C.R. Martin, 2003,2024
+#   Author:     Prof. Andrew C. R. Martin
 #   EMail:      andrew@bioinf.org.uk
 #               
 #*************************************************************************
@@ -47,6 +42,7 @@
 #   =================
 #   V1.0  28.07.03 Original
 #   V1.1  25.05.18 Escaped curly brackets in regexes
+#   V1.2  03.07.24 Added -o option
 #
 #*************************************************************************
 
@@ -120,39 +116,43 @@ foreach $label (keys %labels)
 # -------------------------------------------------
 # First create an array of the first reference to each label in the
 # order in which the labels appeared
-foreach $label (@labelarray)
+if(!defined($::o))
 {
-   if(defined($refs{$label}))
-   {
-      push @refarray, $refs{$label};
-   }
-   else
-   {
-      push @refarray, 0;
-   }
-}
-# Now work through the array and check that every following item is a larger number
-for($i=0; $i<$#refarray; $i++)
-{
-   if($refarray[$i])
-   {
-      for($j=$i+1; $j<=$#refarray; $j++)
-      {
-         if($refarray[$j])
-         {
-            if($refarray[$j] < $refarray[$i])
+    foreach $label (@labelarray)
+    {
+        if(defined($refs{$label}))
+        {
+            push @refarray, $refs{$label};
+        }
+        else
+        {
+            push @refarray, 0;
+        }
+    }
+    # Now work through the array and check that every following item
+    # is a larger number
+    for($i=0; $i<$#refarray; $i++)
+    {
+        if($refarray[$i])
+        {
+            for($j=$i+1; $j<=$#refarray; $j++)
             {
-               print  "Labels referenced out of order:\n";
-               printf "   Label %s appears before %s, but %s is referenced first\n",
-                      $labelarray[$i], $labelarray[$j], $labelarray[$j];
-               printf "         %s appears on line %d and is first referenced on line %d\n",
-                      $labelarray[$i], $labels{$labelarray[$i]}, $refarray[$i];  
-               printf "         %s appears on line %d and is first referenced on line %d\n",
-                      $labelarray[$j], $labels{$labelarray[$j]}, $refarray[$j];
+                if($refarray[$j])
+                {
+                    if($refarray[$j] < $refarray[$i])
+                    {
+                        print  "Labels referenced out of order:\n";
+                        printf "   Label %s appears before %s, but %s is referenced first\n",
+                            $labelarray[$i], $labelarray[$j], $labelarray[$j];
+                        printf "         %s appears on line %d and is first referenced on line %d\n",
+                            $labelarray[$i], $labels{$labelarray[$i]}, $refarray[$i];  
+                        printf "         %s appears on line %d and is first referenced on line %d\n",
+                            $labelarray[$j], $labels{$labelarray[$j]}, $refarray[$j];
+                    }
+                }
             }
-         }
-      }
-   }
+        }
+    }
 }
 
 # Third pass checks balanced environments and curly brackets
@@ -220,10 +220,11 @@ sub UsageDie
 {
     print <<__EOF;
 
-CheckTexRef V1.0
-(c) The University of Reading / Dr. Andrew C.R. Martin, 2003
+CheckTexRef V1.2
+(c) The University of Reading / Prof. Andrew C.R. Martin, 2003-2024
 
-Usage: checktexref file.tex
+Usage: checktexref [-o] file.tex
+       -o Do not check out of order references
 
 Reads a LaTeX file and checks the use of \\ref and \\label commands.
 Reports references to non-existent labels, labels without corresponding
