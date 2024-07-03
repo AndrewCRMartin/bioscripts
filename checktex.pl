@@ -42,39 +42,69 @@
 #   =================
 #   V1.0  28.07.03 Original
 #   V1.1  25.05.18 Escaped curly brackets in regexes
-#   V1.2  03.07.24 Added -o option
+#   V1.2  03.07.24 Added -o and -sf options. Added use strict!
 #
 #*************************************************************************
+use strict;
 
-UsageDie() if defined($h);
+UsageDie() if defined($::h);
 
 # First pass through the file to read labels
 # ------------------------------------------
 open(IN, $ARGV[0]) || die "Can't open file $ARGV[0]\n";
-$linenumber = 1;
+my $linenumber   = 1;
+my $inSubFigure  = 0;
+my %labels       = ();
+my %sfLabels     = ();
+my @labelarray   = ();
+my @sfLabelarray = ();
 while(<IN>)
 {
-   chomp;
-   while(/\\label\{(.*?)\}(.*)/) # If the string contains \label{...}
-   {
-      $label = $1;
-      if(defined($labels{$label}))
-      {
-         print "Label used more than once: $label\n";
-         printf "   Was first used on line %d; reused on line %d\n",
-            $labels{$label}, $linenumber;
-      }
-      else
-      {
-         # Store the linenumber of the first (only) label occurrence
-         # and also push the labels onto an array so that we have
-         # them in order of occurrence
-         $labels{$label} = $linenumber;
-         push @labelarray, $label;
-      }
-      $_ = $rest;
-   }
-   $linenumber++;
+    chomp;
+    if(/\\begin\{subfigure\}/)
+    {
+        $inSubFigure = 1;
+    }
+    if(/\\end\{subfigure\}/)
+    {
+        $inSubFigure = 0;
+    }
+    
+    while(/\\label\{(.*?)\}(.*)/) # If the string contains \label{...}
+    {
+        my $label = $1;
+        my $rest  = $2;
+        if(defined($labels{$label}))
+        {
+            print "Label used more than once: $label\n";
+            printf "   Was first used on line %d; reused on line %d\n",
+                $labels{$label}, $linenumber;
+        }
+        elsif(defined($sfLabels{$label}))
+        {
+            print "SubFigure label used more than once: $label\n";
+            printf "   Was first used on line %d; reused on line %d\n",
+                $sfLabels{$label}, $linenumber;
+        }
+        else
+        {
+            # Store the linenumber of the first (only) label occurrence
+            # and also push the labels onto an array so that we have
+            # them in order of occurrence
+            if(defined($::sf) && $inSubFigure)
+            {
+                $sfLabels{$label} = $linenumber;
+                push @sfLabelarray, $label;
+            }
+            else
+            {
+                $labels{$label} = $linenumber;
+                push @labelarray, $label;
+            }
+        }
+        $_ = $rest;
+    }
+    $linenumber++;
 }
 close IN;
 
@@ -83,33 +113,35 @@ close IN;
 # ---------------------------------------------------------
 open(IN, $ARGV[0]) || die "Can't open file $ARGV[0]\n";
 $linenumber = 1;
+my %refs    = ();
 while(<IN>)
 {
-   chomp;
-   while(/\\ref\{(.*?)\}(.*)/) # If the string contains \ref{...}
-   {
-      $label = $1;
-      $rest  = $2;
-      if(!defined($labels{$label}))
-      {
-         print "Label was referenced on line $linenumber, but not defined: $label\n";
-      }
-      $refs{$label} = $linenumber if(!defined($refs{$label}));
-      $_ = $2;
-   }
-   $linenumber++;
+    chomp;
+    while(/\\ref\{(.*?)\}(.*)/) # If the string contains \ref{...}
+    {
+        my $label = $1;
+        my $rest  = $2;
+        if(!defined($labels{$label}) &&
+           !defined($sfLabels{$label}))
+        {
+            print "Label was referenced on line $linenumber, but not defined: $label\n";
+        }
+        $refs{$label} = $linenumber if(!defined($refs{$label}));
+        $_ = $rest;
+    }
+    $linenumber++;
 }
 close IN;
 
 # Now see if any labels were not referenced
 # -----------------------------------------
-foreach $label (keys %labels)
+foreach my $label (keys %labels)
 {
-   if(!defined($refs{$label}))
-   {
-      printf "Label was defined on line %d, but not referenced: %s\n",
-             $labels{$label}, $label;
-   }
+    if(!defined($refs{$label}))
+    {
+        printf "Label was defined on line %d, but not referenced: %s\n",
+            $labels{$label}, $label;
+    }
 }
 
 # Now see if any labels are referenced out of order
@@ -118,7 +150,8 @@ foreach $label (keys %labels)
 # order in which the labels appeared
 if(!defined($::o))
 {
-    foreach $label (@labelarray)
+    my @refarray = ();
+    foreach my $label (@labelarray)
     {
         if(defined($refs{$label}))
         {
@@ -131,11 +164,11 @@ if(!defined($::o))
     }
     # Now work through the array and check that every following item
     # is a larger number
-    for($i=0; $i<$#refarray; $i++)
+    for(my $i=0; $i<$#refarray; $i++)
     {
         if($refarray[$i])
         {
-            for($j=$i+1; $j<=$#refarray; $j++)
+            for(my $j=$i+1; $j<=$#refarray; $j++)
             {
                 if($refarray[$j])
                 {
@@ -159,27 +192,30 @@ if(!defined($::o))
 # ----------------------------------------------------------
 open(IN, $ARGV[0]) || die "Can't open file $ARGV[0]\n";
 
-$line = 0;
+my $line   = 0;
+my $bra    = 0;
+my @envs   = ();
+my @starts = ();
 while(<IN>)
 {
     $line++;
     $bra += CountChar($_, '{') if(/\{/);
     $bra -= CountChar($_, '}') if(/\}/);
-
-    @words = split(/\\/);
-    foreach $word (@words)
+    
+    my @words = split(/\\/);
+    foreach my $word (@words)
     {
         if($word =~ /begin\{(.*?)\}/)
         {
-            $env = $1;
+            my $env = $1;
             push @envs, $env;
             push @starts, $line;
         }
         if($word =~ /end\{(.*?)\}/)
         {
-            $env = $1;
-            $theenv = pop @envs;
-            $start  = pop @starts;
+            my $env = $1;
+            my $theenv = pop @envs;
+            my $start  = pop @starts;
             if($env ne $theenv)
             {
                 print "\\begin{$theenv} at line $start closed by \\end{$env} at line $line\n";
@@ -224,7 +260,8 @@ CheckTexRef V1.2
 (c) The University of Reading / Prof. Andrew C.R. Martin, 2003-2024
 
 Usage: checktexref [-o] file.tex
-       -o Do not check out of order references
+       -o  Do not check out of order references
+       -sf Do not check unreferenced labels for sub-figures
 
 Reads a LaTeX file and checks the use of \\ref and \\label commands.
 Reports references to non-existent labels, labels without corresponding
